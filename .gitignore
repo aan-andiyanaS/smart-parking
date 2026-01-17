@@ -2,10 +2,18 @@
 # Smart Parking System - Git Ignore
 # ===========================================
 
-# Environment files
+# Environment files (SENSITIVE!)
 .env
 .env.local
 .env.production
+*.env
+
+# SSH Keys & Credentials (SENSITIVE!)
+*.pem
+*.ppk
+*.key
+credentials.json
+serviceAccountKey.json
 
 # Dependencies
 node_modules/
