@@ -1,0 +1,17 @@
+.slot-grid {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--gray-100);
+    border-radius: var(--radius);
+}
+
+.slot-grid-empty {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem;
+    color: var(--gray-500);
+    background: var(--gray-100);
+    border-radius: var(--radius);
+}

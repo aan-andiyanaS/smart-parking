@@ -1,0 +1,47 @@
+# EC2 Backend - Docker Compose
+# Golang API connected to RDS and S3
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: parking-backend
+    environment:
+      # RDS PostgreSQL connection
+      - DATABASE_URL=${DATABASE_URL}
+
+      # AWS S3 configuration (instead of MinIO)
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - USE_AWS_S3=true
+
+      # Server config
+      - PORT=8080
+      - GIN_MODE=release
+
+      # AI Service (optional)
+      - AI_SERVICE_URL=http://ai-service:5000
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+  # Optional: AI Service for auto detection
+  # Uncomment if you want AI-based slot detection
+  # ai-service:
+  #   build:
+  #     context: ./ai-service
+  #     dockerfile: Dockerfile
+  #   container_name: parking-ai
+  #   environment:
+  #     - BACKEND_URL=http://backend:8080
+  #     - YOLO_MODEL=yolo11n.pt
+  #     - PORT=5000
+  #   volumes:
+  #     - ./ai-service/parking_regions.json:/app/parking_regions.json:ro
+  #   ports:
+  #     - "5000:5000"
+  #   restart: unless-stopped

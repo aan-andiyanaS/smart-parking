@@ -1,0 +1,64 @@
+.slot-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-height: 120px;
+    text-align: center;
+}
+
+.slot-card:hover {
+    transform: scale(1.05);
+}
+
+.slot-card:active {
+    transform: scale(0.98);
+}
+
+/* Available state */
+.slot-card.available {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+}
+
+.slot-card.available:hover {
+    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+}
+
+/* Occupied state */
+.slot-card.occupied {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+}
+
+.slot-card.occupied:hover {
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.slot-icon {
+    margin-bottom: 0.5rem;
+}
+
+.slot-icon .check {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.slot-code {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.slot-status {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.9;
+    margin-top: 0.25rem;
+}

@@ -1,0 +1,48 @@
+# ===========================================
+# Smart Parking System - Git Ignore
+# ===========================================
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+bin/
+*.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker volumes (if stored locally)
+data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Go
+*.test
+coverage.out
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
