@@ -1,211 +1,239 @@
-# ESP32-S3 Smart Parking - Wiring Guide
+# Wiring Guide - Smart Parking ESP32-S3
 
-## 📋 Komponen yang Dibutuhkan
+## 📦 Komponen yang Dibutuhkan
 
 | No | Komponen | Qty | Keterangan |
 |----|----------|-----|------------|
-| 1 | ESP32-S3 WROOM N16R8 CAM | 1 | Dengan kamera OV2640 built-in |
-| 2 | Servo Motor SG90/MG996R | 1 | Untuk gate barrier |
-| 3 | LCD 16x2 I2C | 1 | Display status |
-| 4 | VL53L0X ToF Sensor | 1 | Deteksi kendaraan |
-| 5 | LED Hijau 5mm | 1 | Indikator tersedia |
+| 1 | ESP32-S3 WROOM N16R8 + OV2640 | 1 | Camera module built-in |
+| 2 | HC-SR04 Ultrasonic Sensor | 2 | Entry & Exit detection |
+| 3 | SG90 Servo Motor | 1 | Gate control |
+| 4 | LCD 16x2 I2C | 1 | Display status |
+| 5 | LED Hijau 5mm | 1 | Indikator slot tersedia |
 | 6 | LED Merah 5mm | 1 | Indikator penuh |
-| 7 | Buzzer Aktif 5V | 1 | Alarm |
-| 8 | Resistor 220Ω | 2 | Untuk LED |
-| 9 | Breadboard | 1 | Prototyping |
-| 10 | Kabel Jumper | ~20 | Koneksi |
-| 11 | Power Supply 5V 2A | 1 | Untuk servo |
+| 7 | Resistor 220Ω | 2 | Untuk LED |
+| 8 | Breadboard | 1 | |
+| 9 | Kabel Jumper | ~20 | Male-to-Male & Male-to-Female |
 
 ---
 
-## 📌 Wiring Diagram
+## 🔌 Wiring Diagram
 
 ```
-                    ESP32-S3 WROOM N16R8
-                    ┌──────────────────┐
-                    │                  │
-        ┌───────────┤ 3.3V         GND ├───────────┐
-        │           │                  │           │
-        │   ┌───────┤ GPIO 1 (SDA)     │           │
-        │   │       │                  │           │
-        │   │   ┌───┤ GPIO 2 (SCL)     │           │
-        │   │   │   │                  │           │
-        │   │   │   ├ GPIO 4 (LED_G)───┼──►[LED]──┤
-        │   │   │   │                  │           │
-        │   │   │   ├ GPIO 5 (LED_R)───┼──►[LED]──┤
-        │   │   │   │                  │           │
-        │   │   │   ├ GPIO 6 (BUZZER)──┼──►[BUZ]──┤
-        │   │   │   │                  │           │
-        │   │   │   ├ GPIO 21 (SERVO)──┼──►[SRV]  │
-        │   │   │   │                  │           │
-        │   │   │   │   [OV2640 CAM]   │           │
-        │   │   │   │   (Built-in)     │           │
-        │   │   │   │                  │           │
-        │   │   │   └──────────────────┘           │
-        │   │   │                                  │
-        ▼   ▼   ▼                                  ▼
-      ┌─────────────────────────────────────────────┐
-      │                  I2C BUS                    │
-      │  ┌─────────────┐     ┌─────────────┐       │
-      │  │  LCD 16x2   │     │  VL53L0X    │       │
-      │  │  I2C 0x27   │     │  I2C 0x29   │       │
-      │  │             │     │             │       │
-      │  │ SDA ◄───────┼─────┼──► SDA      │       │
-      │  │ SCL ◄───────┼─────┼──► SCL      │       │
-      │  │ VCC ◄───3.3V┼─────┼──► VCC      │       │
-      │  │ GND ◄───GND─┼─────┼──► GND      │       │
-      │  └─────────────┘     └─────────────┘       │
-      └─────────────────────────────────────────────┘
+                            ESP32-S3 WROOM N16R8
+                    ┌─────────────────────────────────┐
+                    │                                 │
+        3.3V ───────┤ 3.3V                       GND ├─────── GND
+                    │                                 │
+                    │                                 │
+   ┌── LCD SDA ─────┤ GPIO 21                GPIO 20 ├───── LCD SCL ──┐
+   │                │                                 │               │
+   │                │                                 │               │
+   │   SERVO ───────┤ GPIO 14                        │               │
+   │                │                                 │               │
+   │   US1 TRIG ────┤ GPIO 1                  GPIO 2 ├───── US1 ECHO  │
+   │                │                                 │               │
+   │   US2 TRIG ────┤ GPIO 42                GPIO 41 ├───── US2 ECHO  │
+   │                │                                 │               │
+   │   LED GREEN ───┤ GPIO 4                  GPIO 5 ├───── LED RED   │
+   │                │                                 │               │
+   │                │                    [OV2640 CAM] │               │
+   │                │                    (Built-in)   │               │
+   │                └─────────────────────────────────┘               │
+   │                                                                   │
+   │                                                                   │
+   │              ┌──────────────────────────────────────────────────┘
+   │              │
+   ▼              ▼
+┌──────────────────────┐
+│   LCD 16x2 I2C       │
+│  ┌────┬────┬────┬────┐
+│  │GND │VCC │SDA │SCL │
+│  └────┴────┴────┴────┘
+│    │    │    │    │
+│   GND  5V  G21  G20
+└──────────────────────┘
 ```
 
 ---
 
-## 📍 Pin Assignment
+## 📍 Pin Assignment Table
 
-### ESP32-S3 GPIO Mapping
+### ESP32-S3 WROOM N16R8 Pinout
 
-| GPIO | Fungsi | Koneksi |
-|------|--------|---------|
-| **GPIO 1** | I2C SDA | LCD SDA, VL53L0X SDA |
-| **GPIO 2** | I2C SCL | LCD SCL, VL53L0X SCL |
-| **GPIO 4** | LED Green | LED Hijau + Resistor 220Ω |
-| **GPIO 5** | LED Red | LED Merah + Resistor 220Ω |
-| **GPIO 6** | Buzzer | Buzzer Aktif |
-| **GPIO 21** | Servo PWM | Servo Signal (Orange) |
-| **3.3V** | Power | LCD VCC, VL53L0X VCC |
-| **5V** | Power | Servo VCC (Merah) |
-| **GND** | Ground | Semua GND komponen |
-
-### Kamera OV2640 (Built-in)
-
-| Pin | GPIO | Keterangan |
-|-----|------|------------|
-| XCLK | 10 | Clock |
-| SIOD | 40 | I2C Data (Camera) |
-| SIOC | 39 | I2C Clock (Camera) |
-| Y2-Y9 | 15,17,18,16,14,12,11,48 | Data pins |
-| VSYNC | 38 | Vertical Sync |
-| HREF | 47 | Horizontal Ref |
-| PCLK | 13 | Pixel Clock |
+| Komponen | Pin ESP32 | Keterangan |
+|----------|-----------|------------|
+| **LCD I2C** | | |
+| SDA | GPIO 21 | Data I2C |
+| SCL | GPIO 20 | Clock I2C |
+| VCC | 5V | Power |
+| GND | GND | Ground |
+| **Servo (Gate)** | | |
+| Signal (Orange) | GPIO 14 | PWM Signal |
+| VCC (Red) | 5V | Power |
+| GND (Brown) | GND | Ground |
+| **Ultrasonic 1 (ENTRY)** | | |
+| VCC | 5V | Power |
+| GND | GND | Ground |
+| TRIG | GPIO 1 | Trigger |
+| ECHO | GPIO 2 | Echo |
+| **Ultrasonic 2 (EXIT)** | | |
+| VCC | 5V | Power |
+| GND | GND | Ground |
+| TRIG | GPIO 42 | Trigger |
+| ECHO | GPIO 41 | Echo |
+| **LED Green** | | |
+| Anode (+) | GPIO 4 | Via 220Ω resistor |
+| Cathode (-) | GND | |
+| **LED Red** | | |
+| Anode (+) | GPIO 5 | Via 220Ω resistor |
+| Cathode (-) | GND | |
 
 ---
 
-## 🔌 Detail Wiring
+## 🔧 Wiring Per Komponen
 
 ### 1. LCD 16x2 I2C
 
 ```
-LCD I2C     →    ESP32-S3
-────────────────────────────
-VCC         →    3.3V
-GND         →    GND
-SDA         →    GPIO 1
-SCL         →    GPIO 2
+LCD I2C          ESP32-S3
+─────────        ────────
+GND      ──────► GND
+VCC      ──────► 5V (VIN)
+SDA      ──────► GPIO 21
+SCL      ──────► GPIO 20
 ```
 
-### 2. VL53L0X ToF Sensor
+> 📝 LCD I2C biasanya menggunakan alamat `0x27` atau `0x3F`. Jika LCD tidak muncul, coba ganti alamat di code.
+
+### 2. Servo Motor SG90 (Gate)
 
 ```
-VL53L0X     →    ESP32-S3
-────────────────────────────
-VCC         →    3.3V
-GND         →    GND
-SDA         →    GPIO 1 (shared with LCD)
-SCL         →    GPIO 2 (shared with LCD)
+Servo SG90       ESP32-S3
+───────────      ────────
+Brown (GND) ───► GND
+Red (VCC)   ───► 5V (VIN)
+Orange (Sig)───► GPIO 14
 ```
 
-### 3. Servo Motor
+> ⚠️ Jika servo tidak stabil, gunakan power supply eksternal 5V untuk servo.
+
+### 3. Ultrasonic HC-SR04 #1 (ENTRY Gate)
 
 ```
-Servo       →    ESP32-S3
-────────────────────────────
-Signal (Orange/Yellow)  →  GPIO 21
-VCC (Red)              →  5V External
-GND (Brown/Black)      →  GND
+HC-SR04 #1       ESP32-S3
+───────────      ────────
+VCC        ────► 5V
+GND        ────► GND
+TRIG       ────► GPIO 1
+ECHO       ────► GPIO 2
 ```
 
-> ⚠️ **PENTING:** Servo membutuhkan power supply terpisah 5V 2A. Jangan langsung dari ESP32!
-
-### 4. LED Hijau
+### 4. Ultrasonic HC-SR04 #2 (EXIT Gate)
 
 ```
-GPIO 4 ──► [Resistor 220Ω] ──► [LED Hijau +] ──► [LED -] ──► GND
+HC-SR04 #2       ESP32-S3
+───────────      ────────
+VCC        ────► 5V
+GND        ────► GND
+TRIG       ────► GPIO 42
+ECHO       ────► GPIO 41
 ```
 
-### 5. LED Merah
+### 5. LED Indicators
 
 ```
-GPIO 5 ──► [Resistor 220Ω] ──► [LED Merah +] ──► [LED -] ──► GND
-```
+LED Green        ESP32-S3
+─────────        ────────
+Anode (+) ──[220Ω]──► GPIO 4
+Cathode(-)──────────► GND
 
-### 6. Buzzer
-
-```
-GPIO 6 ──► [Buzzer +] ──► [Buzzer -] ──► GND
-```
-
----
-
-## ⚡ Power Supply
-
-```
-┌─────────────────────────────────────────┐
-│           Power Distribution            │
-├─────────────────────────────────────────┤
-│                                         │
-│   [5V 2A Power Supply]                  │
-│          │                              │
-│          ├──► ESP32-S3 (via USB-C)      │
-│          │                              │
-│          └──► Servo VCC (Red wire)      │
-│                                         │
-│   ESP32-S3 3.3V ──► LCD, VL53L0X        │
-│   ESP32-S3 GND  ──► All GND             │
-│                                         │
-└─────────────────────────────────────────┘
+LED Red          ESP32-S3
+───────          ────────
+Anode (+) ──[220Ω]──► GPIO 5
+Cathode(-)──────────► GND
 ```
 
 ---
 
-## 📸 Camera OV2640 Orientation
+## 🎨 Physical Layout (Top View)
 
 ```
-    ┌─────────────────────────┐
-    │     ESP32-S3 Board      │
-    │  ┌───────────────────┐  │
-    │  │                   │  │
-    │  │     [  O  ]       │  │  ◄── Camera Lens
-    │  │    OV2640         │  │      (point toward parking area)
-    │  │                   │  │
-    │  └───────────────────┘  │
-    │                         │
-    │  [USB-C]  [Reset] [Boot]│
-    └─────────────────────────┘
+                    ┌─────────────────────────────────────────┐
+                    │           PARKING LOT                   │
+                    │                                         │
+                    │    ┌─────┐ ┌─────┐                     │
+                    │    │ P1  │ │ P2  │                     │
+                    │    └─────┘ └─────┘                     │
+                    │    ┌─────┐ ┌─────┐                     │
+                    │    │ P3  │ │ P4  │                     │
+                    │    └─────┘ └─────┘                     │
+                    │                                         │
+                    │                📷                       │
+                    │            [CAMERA]                     │
+                    │                                         │
+                    │    ┌────────────────────────┐          │
+                    │    │      LCD 16x2          │          │
+                    │    │  "PARKIR CERDAS"       │          │
+                    │    │   Slot: 3/4            │          │
+                    │    └────────────────────────┘          │
+                    │                                         │
+                    │   🟢    🔴                              │
+                    │  [LED] [LED]                            │
+                    │                                         │
+    ════════════════╬═════════════════════════╬══════════════
+         ENTRY      │                         │      EXIT
+                    │                         │
+    ┌────────┐      │      ╔═══════╗          │      ┌────────┐
+    │ US #1  │      │      ║ GATE  ║          │      │ US #2  │
+    │(HC-SR04)│     │      ║(SERVO)║          │      │(HC-SR04)│
+    └────────┘      │      ╚═══════╝          │      └────────┘
+                    │                         │
+    ════════════════╬═════════════════════════╬══════════════
 ```
 
 ---
 
-## ✅ Checklist Sebelum Upload
+## ⚡ Power Requirements
 
-- [ ] WiFi SSID dan Password sudah diisi di `main.cpp`
-- [ ] Server URL sudah diisi (IP address backend)
-- [ ] Semua koneksi sudah dicek
-- [ ] Power supply servo terpisah dari ESP32
-- [ ] I2C address LCD dan VL53L0X benar (0x27 dan 0x29)
+| Komponen | Tegangan | Arus |
+|----------|----------|------|
+| ESP32-S3 | 3.3V/5V | ~240mA |
+| LCD I2C | 5V | ~20mA |
+| Servo SG90 | 5V | ~200-600mA |
+| HC-SR04 x2 | 5V | ~30mA |
+| LED x2 | 3.3V | ~20mA |
+| **Total** | | **~600mA** |
+
+> 💡 **Rekomendasi:** Gunakan power supply 5V 2A untuk menjamin stabilitas, terutama saat servo aktif.
 
 ---
 
-## 🚀 Upload Firmware
+## ⚠️ Troubleshooting
 
-```bash
-cd firmware
+### LCD tidak muncul
+- Cek alamat I2C: Coba `0x27` atau `0x3F`
+- Cek wiring SDA/SCL tidak tertukar
+- Putar potensiometer kontras di belakang LCD
 
-# Build
-pio run
+### Servo tidak bergerak/gemetar
+- Gunakan power supply eksternal 5V
+- Pastikan GND servo terhubung ke GND ESP32
 
-# Upload
-pio run -t upload
+### Ultrasonic tidak akurat
+- Jauhkan dari objek penghalang
+- Pastikan permukaan target flat
+- Hindari interference dari ultrasonic lain (beri jarak >2cm antar pengukuran)
 
-# Monitor Serial
-pio device monitor
-```
+### Camera tidak capture
+- Cek pin camera sesuai dengan module
+- Restart ESP32 jika camera freeze
+
+---
+
+## 📋 Checklist Sebelum Upload Code
+
+- [ ] Semua komponen terhubung sesuai diagram
+- [ ] Power supply memadai (5V 2A)
+- [ ] WiFi SSID & Password sudah diganti di code
+- [ ] Server URL sudah diganti di code
+- [ ] I2C address LCD sudah benar (0x27 atau 0x3F)
