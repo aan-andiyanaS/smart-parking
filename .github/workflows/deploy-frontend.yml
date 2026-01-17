@@ -1,5 +1,5 @@
-# GitHub Actions - Deploy Frontend to AWS EC2 + CloudFront
-# Triggers on push to main branch (frontend changes only)
+# GitHub Actions - Deploy Frontend to AWS EC2
+# Uses Cloudflare for CDN (no cache invalidation needed - auto purge)
 
 name: Deploy Frontend
 
@@ -81,16 +81,9 @@ jobs:
           target: "/home/ubuntu/smart-parking/"
           strip_components: 0
 
-      - name: Invalidate CloudFront Cache
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*"
+      # Cloudflare cache is automatically purged or use API if needed
+      # No CloudFront invalidation step needed
 
       - name: Notify Success
         if: success()
-        run: echo "✅ Frontend deployed and cache invalidated!"
+        run: echo "✅ Frontend deployed! Cloudflare will auto-cache new content."

@@ -1,4 +1,5 @@
 # GitHub Actions CI/CD Setup Guide
+# 📡 Using Cloudflare as CDN
 
 Panduan lengkap untuk setup CI/CD dengan GitHub Actions.
 
@@ -16,9 +17,8 @@ Panduan lengkap untuk setup CI/CD dengan GitHub Actions.
 │       ├── backend/** changed  ──► Deploy Backend EC2   │
 │       │                                                 │
 │       └── frontend/** changed ──► Build ──► Deploy EC2 │
-│                                       │                 │
-│                                       └──► Invalidate  │
-│                                           CloudFront   │
+│                                                         │
+│  Cloudflare automatically caches new content!          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -77,7 +77,7 @@ Copy semua termasuk `-----BEGIN...` dan `-----END...`
 |-------------|-------|
 | `DATABASE_URL` | `postgres://postgres:PASSWORD@rds-endpoint:5432/smartparking?sslmode=require` |
 
-#### AWS Credentials
+#### AWS Credentials (untuk S3 only)
 
 | Secret Name | Value | Cara Dapat |
 |-------------|-------|------------|
@@ -85,14 +85,13 @@ Copy semua termasuk `-----BEGIN...` dan `-----END...`
 | `AWS_ACCESS_KEY_ID` | `AKIA...` | IAM → Users → Security credentials |
 | `AWS_SECRET_ACCESS_KEY` | `xxx...` | IAM → Users → Security credentials |
 | `S3_BUCKET` | `smart-parking-images-xxx` | S3 Console |
-| `CLOUDFRONT_DISTRIBUTION_ID` | `EXAMPLEID` | CloudFront Console |
 
 #### Frontend Build
 
 | Secret Name | Value |
 |-------------|-------|
-| `API_URL` | `https://d1234abcd.cloudfront.net/api` |
-| `WS_URL` | `wss://backend-ec2-ip:8080/ws` |
+| `API_URL` | `https://api.yourdomain.com` |
+| `WS_URL` | `wss://api.yourdomain.com/ws` |
 
 ---
 
@@ -103,7 +102,6 @@ Copy semua termasuk `-----BEGIN...` dan `-----END...`
 3. Access type: **Access key - Programmatic access** ✓
 4. Attach policies:
    - `AmazonS3FullAccess`
-   - `CloudFrontFullAccess`
 5. Create user
 6. **Copy Access Key ID dan Secret Access Key!**
 
@@ -153,7 +151,7 @@ Jalan pada: Push ke main yang mengubah `frontend/**`
 - SSH ke EC2 Frontend
 - Copy files
 - Restart Nginx
-- Invalidate CloudFront cache
+- Cloudflare auto-caches new content
 ```
 
 ---
@@ -175,6 +173,22 @@ gh workflow run deploy-frontend.yml
 
 ---
 
+## 🔄 Cloudflare Cache
+
+Cloudflare otomatis cache content baru. Jika perlu purge manual:
+
+1. **Cloudflare Dashboard → Caching → Purge Everything**
+
+Atau via API (opsional, bisa ditambah ke workflow):
+```bash
+curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
+     -H "Authorization: Bearer CLOUDFLARE_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     --data '{"purge_everything":true}'
+```
+
+---
+
 ## ❌ Troubleshooting
 
 ### SSH Connection Failed
@@ -188,9 +202,9 @@ gh workflow run deploy-frontend.yml
   docker-compose -f aws/backend.docker-compose.yml logs
   ```
 
-### CloudFront Invalidation Failed
-- Cek `CLOUDFRONT_DISTRIBUTION_ID` benar
-- Cek IAM user punya permission `CloudFrontFullAccess`
+### Cache Not Updated
+- Cloudflare → Caching → Development Mode → On (disable cache sementara)
+- Atau Purge Everything
 
 ---
 
@@ -203,4 +217,4 @@ gh workflow run deploy-frontend.yml
 - [ ] First push berhasil trigger workflow
 - [ ] Backend deploy success
 - [ ] Frontend deploy success
-- [ ] CloudFront cache cleared
+- [ ] Cloudflare DNS configured

@@ -1,5 +1,6 @@
 # AWS Console Setup Guide - Smart Parking System
 # 💰 OPTIMIZED FOR FREE TIER ($100 Credit)
+# 📡 Using Cloudflare as CDN (FREE)
 
 Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **biaya minimal**.
 
@@ -13,10 +14,10 @@ Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **b
 | EC2 Frontend | t2.micro | 750 jam/bulan (1 tahun) | **$0** |
 | RDS PostgreSQL | db.t3.micro | 750 jam/bulan (1 tahun) | **$0** |
 | S3 | 5GB | 5GB free | **$0** |
-| CloudFront | Minimal | 1TB/bulan (1 tahun) | **$0-2** |
-| **Total** | | | **$0-5/bulan** |
+| Cloudflare CDN | Unlimited | Always free | **$0** |
+| **Total** | | | **$0/bulan** |
 
-> ⚠️ **Dengan $100 credit, bisa jalan ~20+ bulan!**
+> ⚠️ **Dengan $100 credit, bisa jalan sangat lama!**
 
 ---
 
@@ -28,7 +29,7 @@ Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **b
 4. [Create S3 Bucket (Free)](#4-create-s3-bucket-free)
 5. [Create EC2 Backend (Free Tier)](#5-create-ec2-backend-free-tier)
 6. [Create EC2 Frontend (Free Tier)](#6-create-ec2-frontend-free-tier)
-7. [Create CloudFront (Free Tier)](#7-create-cloudfront-free-tier)
+7. [Setup Cloudflare CDN (Free)](#7-setup-cloudflare-cdn-free)
 8. [Deploy Application](#8-deploy-application)
 9. [Tips Hemat Biaya](#9-tips-hemat-biaya)
 
@@ -200,28 +201,30 @@ Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **b
 
 ---
 
-## 7. Create CloudFront (Free Tier)
+## 7. Setup Cloudflare CDN (Free)
 
-1. **Services → CloudFront → Create distribution**
+> 📖 Lihat dokumentasi lengkap: `docs/CLOUDFLARE_SETUP.md`
 
-2. **Origin**:
-   - Domain: EC2 Frontend Public DNS
-   - Protocol: HTTP only
+### Ringkasan:
 
-3. **Cache behavior**:
-   - Viewer protocol: Redirect HTTP to HTTPS
-   - Compress: Yes
+1. **Daftar** di https://dash.cloudflare.com/sign-up
 
-4. **Settings**:
-   - Price class: ⭐ **Use only North America and Europe** (termurah)
-   - Default root object: `index.html`
+2. **Add site** → masukkan domain kamu
 
-5. **Create distribution**
+3. **Update nameservers** di domain registrar
 
-### Untuk Custom Domain:
-1. **ACM (US East region)** → Request certificate → DNS validation
-2. **CloudFront** → Edit → Add CNAME + SSL certificate
-3. **DNS** → Add CNAME record
+4. **Add DNS records**:
+   | Type | Name | Content | Proxy |
+   |------|------|---------|-------|
+   | A | `@` | EC2 Frontend IP | ☁️ Proxied |
+   | A | `www` | EC2 Frontend IP | ☁️ Proxied |
+   | A | `api` | EC2 Backend IP | ☁️ Proxied |
+
+5. **SSL/TLS** → Mode: **Full** atau **Flexible**
+
+**Hasil:**
+- `yourdomain.com` → Frontend dengan HTTPS gratis!
+- `api.yourdomain.com` → Backend
 
 ---
 
@@ -313,10 +316,10 @@ docker-compose -f aws/frontend.docker-compose.yml up -d
    - t2.micro untuk EC2
    - db.t3.micro untuk RDS
    - 5GB S3
+   - Cloudflare (gratis selamanya!)
 
 3. **Disable fitur yang tidak perlu**
    - RDS: backup, encryption, monitoring
-   - CloudFront: logging
 
 4. **Set Billing Alerts**
    - AWS Console → Billing → Budgets
@@ -344,5 +347,5 @@ docker-compose -f aws/frontend.docker-compose.yml up -d
 - [ ] RDS: db.t3.micro ✓
 - [ ] Storage: 8GB per EC2 ✓
 - [ ] S3: Public bucket ✓
-- [ ] CloudFront: Minimal config ✓
+- [ ] Cloudflare: DNS + CDN setup ✓
 - [ ] Billing alert set ✓
