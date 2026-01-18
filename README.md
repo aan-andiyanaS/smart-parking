@@ -6,18 +6,39 @@
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python)
+
+---
 
 ## 📋 Overview
 
-Smart Parking System adalah aplikasi IoT untuk monitoring ketersediaan slot parkir secara real-time. Sistem ini dirancang untuk mendukung SDG 11 (Sustainable Cities) dengan mengoptimalkan penggunaan area parkir.
+Smart Parking System adalah aplikasi IoT untuk monitoring ketersediaan slot parkir secara real-time menggunakan AI computer vision. Sistem ini dirancang untuk mendukung SDG 11 (Sustainable Cities) dengan mengoptimalkan penggunaan area parkir.
 
-### Features
-- ✅ Real-time slot monitoring
-- ✅ Live camera capture
-- ✅ WebSocket updates
-- ✅ Responsive dashboard
-- ✅ Docker deployment
+### ✨ Features
+- ✅ Real-time slot detection dengan AI (YOLOv8)
+- ✅ Live camera stream dari ESP32-CAM
+- ✅ WebSocket real-time updates
+- ✅ Responsive web dashboard
+- ✅ Docker deployment support
 - ✅ S3-compatible storage (MinIO)
+
+---
+
+## 📚 Dokumentasi
+
+| Dokumen | Deskripsi |
+|---------|-----------|
+| [📐 Arsitektur Sistem](docs/ARCHITECTURE.md) | Diagram & penjelasan komponen |
+| [📖 Manual Guide](docs/MANUAL_GUIDE.md) | Panduan lengkap penggunaan |
+| [🔧 Setup Firmware (PlatformIO)](docs/PLATFORMIO_SETUP.md) | Upload firmware via PlatformIO |
+| [🔌 Wiring Guide](firmware/WIRING_GUIDE.md) | Skema pengkabelan ESP32 |
+| [🔧 Setup Firmware (Arduino)](firmware/arduino/README.md) | Upload firmware via Arduino IDE |
+| [☁️ AWS Deployment](docs/AWS_DEPLOYMENT.md) | Deploy ke AWS EC2/RDS/S3 |
+| [☁️ AWS Console Setup](docs/AWS_CONSOLE_SETUP.md) | Setup AWS via Console |
+| [🔄 CI/CD Setup](docs/CICD_SETUP.md) | GitHub Actions deployment |
+| [🌐 Cloudflare Setup](docs/CLOUDFLARE_SETUP.md) | CDN & DNS configuration |
+
+---
 
 ## 🏗️ Architecture
 
@@ -35,50 +56,82 @@ Smart Parking System adalah aplikasi IoT untuk monitoring ketersediaan slot park
        ┌─────────────────────┼─────────────────────┐
        ▼                     ▼                     ▼
 ┌─────────────┐     ┌───────────────┐     ┌─────────────┐
-│ PostgreSQL  │     │    MinIO      │     │   Redis     │
-│   :5432     │     │    :9000      │     │  (optional) │
+│ PostgreSQL  │     │    MinIO      │     │ AI Service  │
+│   :5432     │     │    :9000      │     │   :5000     │
 └─────────────┘     └───────────────┘     └─────────────┘
+                                                 │
+                                          ┌──────┴──────┐
+                                          │  ESP32-CAM  │
+                                          │   Stream    │
+                                          └─────────────┘
 ```
+
+---
+
+## 🔄 Cara Kerja Aplikasi
+
+### System Architecture
+
+![System Architecture](docs/images/system_architecture.png)
+
+### Workflow Diagram
+
+![Smart Parking Workflow](docs/images/smart_parking_flow.png)
+
+**Penjelasan Flow:**
+
+1. **ESP32-CAM** → Streaming video ke AI Service
+2. **AI Service (Python/YOLOv8)** → Mendeteksi kendaraan dan mengirim hasil ke Backend
+3. **Backend (Golang)** → Update database PostgreSQL dan broadcast via WebSocket
+4. **Web Dashboard (React)** → Menerima update real-time dan menampilkan ke user
+
+---
+
+## �🖥️ Prerequisites
+
+| Software | Versi | Kebutuhan |
+|----------|-------|-----------|
+| Docker Desktop | 4.0+ | Mode Docker |
+| Node.js | 18+ | Semua mode |
+| Go | 1.21+ | Mode Manual |
+| Python | 3.11+ | AI Service |
+| VS Code + PlatformIO | Latest | Firmware |
+
+---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Docker Desktop
-- Git
+### Mode 1: Docker Development (Paling Mudah)
 
-### 1. Clone & Setup
+Cara paling cepat untuk menjalankan seluruh sistem dengan Docker Compose.
 
-```bash
-# Navigate to project
-cd smart-parking
+#### Step 1: Setup Environment
 
+```powershell
 # Copy environment file
-cp .env.example .env
+copy .env.example .env
 ```
 
-### 2. Build Frontend
+#### Step 2: Build Frontend
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run build
 cd ..
 ```
 
-### 3. Start Services
+#### Step 3: Start All Services
 
-```bash
-# Start all containers
+```powershell
+# Jalankan semua container
 docker-compose up -d
 
-# Check status
+# Verifikasi status
 docker-compose ps
-
-# View logs
-docker-compose logs -f backend
 ```
 
-### 4. Access Application
+#### Step 4: Access Application
 
 | Service | URL |
 |---------|-----|
@@ -86,43 +139,175 @@ docker-compose logs -f backend
 | **API** | http://localhost/api/slots |
 | **MinIO Console** | http://localhost:9001 |
 
-MinIO credentials: `minioadmin` / `minioadmin123`
+> **MinIO Credentials**: `minioadmin` / `minioadmin123`
 
-## 📁 Project Structure
+---
 
+### Mode 2: Manual Development (Untuk Development)
+
+Mode ini untuk development aktif dimana Anda bisa mengedit dan hot-reload setiap service.
+
+#### Step 1: Start Database (PostgreSQL + MinIO)
+
+```powershell
+# Jalankan hanya database services
+docker-compose up -d postgres minio createbuckets
 ```
-smart-parking/
-├── docker-compose.yml       # Docker orchestration
-├── .env.example             # Environment template
-│
-├── backend/                 # Golang API server
-│   ├── Dockerfile
-│   ├── go.mod
-│   ├── cmd/server/main.go
-│   └── internal/
-│       ├── config/
-│       ├── database/
-│       ├── handlers/
-│       ├── models/
-│       └── services/
-│
-├── frontend/                # React dashboard
-│   ├── Dockerfile
-│   ├── package.json
-│   └── src/
-│       ├── App.jsx
-│       ├── components/
-│       └── services/
-│
-├── nginx/                   # Nginx configuration
-│   └── nginx.conf
-│
-├── database/                # Database schema
-│   └── init.sql
-│
-└── docs/                    # Documentation
-    └── MANUAL_GUIDE.md
+
+#### Step 2: Setup Environment Variables
+
+```powershell
+# PowerShell - Set environment variables
+$env:DATABASE_URL="postgres://postgres:postgres123@localhost:5432/smartparking?sslmode=disable"
+$env:MINIO_ENDPOINT="localhost:9000"
+$env:MINIO_ACCESS_KEY="minioadmin"
+$env:MINIO_SECRET_KEY="minioadmin123"
+$env:MINIO_BUCKET="parking-images"
+$env:ESP32_STREAM_URL="http://192.168.1.50"  # Ganti dengan IP ESP32
+$env:AI_SERVICE_URL="http://localhost:5000"
 ```
+
+#### Step 3: Start Backend (Go)
+
+```powershell
+cd backend
+go mod tidy
+go run cmd/server/main.go
+```
+
+> Backend akan berjalan di `http://localhost:8080`
+
+#### Step 4: Start Frontend (React)
+
+```powershell
+# Terminal baru
+cd frontend
+npm install
+npm run dev
+```
+
+> Frontend akan berjalan di `http://localhost:3000` dengan proxy ke backend
+
+#### Step 5: Start AI Service (Python)
+
+```powershell
+# Terminal baru
+cd ai-service
+pip install -r requirements.txt
+python main.py
+```
+
+> AI Service akan berjalan di `http://localhost:5000`
+
+#### Step 6: Access Dashboard
+
+Buka browser ke `http://localhost:3000`
+
+---
+
+### Mode 3: Firmware Setup (ESP32)
+
+Setup firmware untuk ESP32-CAM yang akan mengirim video stream ke sistem.
+
+#### Opsi A: Arduino IDE (Lebih Mudah)
+📖 Lihat: [firmware/arduino/README.md](firmware/arduino/README.md)
+
+#### Opsi B: PlatformIO (Lebih Advanced)
+📖 Lihat: [docs/PLATFORMIO_SETUP.md](docs/PLATFORMIO_SETUP.md)
+
+#### Wiring
+📖 Lihat: [firmware/WIRING_GUIDE.md](firmware/WIRING_GUIDE.md)
+
+---
+
+## 🔧 Environment Variables
+
+Edit file `.env` sesuai kebutuhan:
+
+```env
+# Database
+DATABASE_URL=postgres://postgres:postgres123@localhost:5432/smartparking?sslmode=disable
+
+# MinIO (S3 Storage)
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin123
+MINIO_BUCKET=parking-images
+
+# ESP32 Camera Stream URL (ganti dengan IP ESP32 Anda)
+ESP32_STREAM_URL=http://192.168.1.50
+
+# AI Service
+AI_SERVICE_URL=http://localhost:5000
+```
+
+---
+
+## ❌ Troubleshooting
+
+### "Failed to fetch data. Is the backend running?"
+
+**Penyebab**: Frontend tidak bisa terhubung ke backend API.
+
+**Solusi**:
+```powershell
+# Cek apakah backend berjalan
+netstat -ano | findstr :8080
+
+# Jika menggunakan Mode Manual, pastikan environment variables ter-set
+# dan jalankan backend:
+cd backend
+go run cmd/server/main.go
+
+# Jika menggunakan Docker, cek logs:
+docker-compose logs backend
+```
+
+### "No parking slots configured"
+
+**Penyebab**: Database belum memiliki data slot parkir.
+
+**Solusi**: Slot parkir perlu dikonfigurasi melalui AI Service annotation tool atau API.
+
+### "Camera not connected" / Stream tidak muncul
+
+**Penyebab**: ESP32_STREAM_URL tidak benar atau ESP32 tidak terhubung.
+
+**Solusi**:
+1. Cek IP ESP32 melalui Serial Monitor
+2. Update `ESP32_STREAM_URL` di `.env` dengan IP yang benar
+3. Pastikan ESP32 dan laptop terhubung ke WiFi yang sama
+
+### "AI detection not working"
+
+**Penyebab**: AI Service tidak berjalan atau belum dikonfigurasi.
+
+**Solusi**:
+```powershell
+# Cek apakah AI Service berjalan
+netstat -ano | findstr :5000
+
+# Jalankan AI Service:
+cd ai-service
+python main.py
+```
+
+### Container tidak berjalan (Docker)
+
+```powershell
+# Lihat logs container
+docker-compose logs backend
+docker-compose logs postgres
+
+# Restart container
+docker-compose restart backend
+
+# Reset semua (hapus data)
+docker-compose down -v
+docker-compose up -d
+```
+
+---
 
 ## 🔌 API Endpoints
 
@@ -135,79 +320,36 @@ smart-parking/
 | GET | `/api/slots/stats` | Get parking statistics |
 | POST | `/api/capture` | Upload camera image |
 | GET | `/api/capture/latest` | Get latest capture |
+| GET | `/api/stream` | Proxy ESP32 stream |
 | WS | `/ws` | WebSocket connection |
 
-## 🔧 Development
+---
 
-### Backend (Golang)
+## 📁 Project Structure
 
-```bash
-cd backend
-
-# Download dependencies
-go mod tidy
-
-# Run locally
-go run cmd/server/main.go
+```
+smart-parking/
+├── backend/                 # Golang API server
+│   ├── cmd/server/main.go
+│   └── internal/
+├── frontend/                # React dashboard
+│   ├── src/
+│   └── vite.config.js
+├── ai-service/              # Python AI detection
+│   ├── main.py
+│   └── annotate_slots.py
+├── firmware/                # ESP32 firmware
+│   ├── arduino/             # Arduino IDE version
+│   ├── src/                 # PlatformIO version
+│   └── WIRING_GUIDE.md
+├── docs/                    # Documentation
+├── nginx/                   # Nginx configuration
+├── database/                # Database schema
+├── docker-compose.yml       # Docker orchestration
+└── .env.example             # Environment template
 ```
 
-### Frontend (React)
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Development server
-npm run dev
-
-# Build for production
-npm run build
-```
-
-## 🐳 Docker Commands
-
-```bash
-# Start all services
-docker-compose up -d
-
-# Rebuild specific service
-docker-compose up -d --build backend
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-
-# Remove volumes (clean start)
-docker-compose down -v
-```
-
-## ☁️ AWS Deployment
-
-### Using EC2 + Docker
-
-```bash
-# On EC2 instance
-sudo yum install docker docker-compose-plugin -y
-sudo systemctl start docker
-
-# Clone project
-git clone <your-repo>
-cd smart-parking
-
-# Start services
-docker compose up -d
-```
-
-### Using ECS
-
-1. Push images to ECR
-2. Create ECS Task Definition
-3. Create ECS Service
-4. Configure ALB for load balancing
+---
 
 ## 👥 Team
 
@@ -215,8 +357,11 @@ docker compose up -d
 |------|----------------|
 | Lead Developer | Backend, Docker, Infrastructure |
 | Frontend Dev | React Dashboard, UI/UX |
+| AI/ML Engineer | Computer Vision, YOLOv8 |
+| IoT Engineer | ESP32 Firmware, Hardware |
 | Documentation | Architecture docs, Manual Guide |
-| QA/Testing | Testing, Demo preparation |
+
+---
 
 ## 📄 License
 
