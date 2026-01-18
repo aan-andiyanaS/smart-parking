@@ -42,6 +42,11 @@ CORS(app)
 # Global variables
 model = None
 parking_regions = []
+last_detection = {
+    'vehicles_detected': 0,
+    'slot_status': {},
+    'timestamp': None
+}
 
 def load_yolo_model():
     """Load YOLO model"""
@@ -288,6 +293,14 @@ def analyze_endpoint():
     if result is None:
         return jsonify({'success': False, 'error': 'Analysis failed'}), 500
     
+    # Store for overlay endpoint
+    global last_detection
+    last_detection = {
+        'vehicles_detected': result['vehicles_detected'],
+        'slot_status': result['slot_status'],
+        'timestamp': result['timestamp']
+    }
+    
     # Update backend
     if result['slot_status']:
         update_backend(result['slot_status'])
@@ -323,6 +336,50 @@ def set_regions():
     return jsonify({
         'success': True,
         'message': f'Saved {len(parking_regions)} regions'
+    })
+
+@app.route('/overlay', methods=['GET'])
+def get_overlay():
+    """
+    Get overlay data for frontend rendering
+    
+    Returns parking regions (polygons) with current slot status
+    Frontend can use this to draw colored overlays on live video
+    
+    GET /overlay
+    
+    Returns: {
+        'success': true,
+        'regions': [
+            {
+                'code': 'P1',
+                'points': [[x1,y1], [x2,y2], ...],
+                'is_occupied': true/false
+            },
+            ...
+        ],
+        'last_detection': {
+            'vehicles_detected': 2,
+            'timestamp': '2026-01-17T22:00:00'
+        }
+    }
+    """
+    # Combine regions with status
+    overlay_regions = []
+    for region in parking_regions:
+        overlay_regions.append({
+            'code': region['code'],
+            'points': region['points'],
+            'is_occupied': last_detection['slot_status'].get(region['code'], False)
+        })
+    
+    return jsonify({
+        'success': True,
+        'regions': overlay_regions,
+        'last_detection': {
+            'vehicles_detected': last_detection['vehicles_detected'],
+            'timestamp': last_detection['timestamp']
+        }
     })
 
 # ==========================================

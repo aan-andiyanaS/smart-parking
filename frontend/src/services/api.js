@@ -66,4 +66,16 @@ export const uploadImage = async (file, cameraId = 'cam1') => {
     })
 }
 
+// ==========================================
+// Stream API
+// ==========================================
+
+export const getStreamStatus = async () => {
+    return api.get('/api/stream/status')
+}
+
+export const setStreamUrl = async (url) => {
+    return api.put('/api/stream/url', { url })
+}
+
 export default api

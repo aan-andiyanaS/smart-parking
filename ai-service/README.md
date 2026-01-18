@@ -35,6 +35,18 @@ python annotate_slots.py <gambar_parkiran.jpg>
 
 Output: `parking_regions.json`
 
+#### 🔬 Alternatif: Gunakan Google Colab
+
+Jika Anda tidak memiliki akses ke environment dengan GUI (atau ingin eksperimen terlebih dahulu), bisa menggunakan notebook Colab:
+
+1. Upload `annotate_slots_colab.ipynb` ke Google Colab
+2. Upload gambar parkir Anda
+3. Klik untuk mendefinisikan region slot
+4. Download `parking_regions.json` yang dihasilkan
+5. Copy file tersebut ke folder `ai-service/`
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com)
+
 ### 3. Run AI Service
 
 ```bash

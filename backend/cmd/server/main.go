@@ -79,6 +79,13 @@ func main() {
 		api.POST("/capture", captureHandler.Upload)
 		api.GET("/capture/latest", captureHandler.GetLatest)
 		api.GET("/captures", captureHandler.GetAll)
+
+		// Stream proxy endpoints (ESP32 camera)
+		streamHandler := handlers.NewStreamHandler()
+		api.GET("/stream", streamHandler.ProxyStream)
+		api.GET("/stream/capture", streamHandler.ProxyCapture)
+		api.GET("/stream/status", streamHandler.GetCameraStatus)
+		api.PUT("/stream/url", streamHandler.SetCameraURL)
 	}
 
 	// WebSocket endpoint
