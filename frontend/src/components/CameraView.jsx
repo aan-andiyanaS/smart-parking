@@ -13,8 +13,8 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
     const canvasRef = useRef(null)
     const streamRef = useRef(null)
 
-    // Stream URL - use prop or default to API route
-    const actualStreamUrl = streamUrl || '/api/stream'
+    // Stream URL - use prop or relative path (works through nginx proxy)
+    const actualStreamUrl = streamUrl || (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL + '/api/stream' : '/api/stream')
     const actualAiUrl = aiServiceUrl || (import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:5000')
 
     // Fetch overlay data from AI service

@@ -35,6 +35,27 @@ PARKING_REGIONS_FILE = 'parking_regions.json'
 CONFIDENCE_THRESHOLD = 0.5
 DETECTION_INTERVAL = 5  # seconds
 
+# Detection Mode:
+# True = Detect ALL objects (for demo/testing with any object)
+# False = Detect only vehicles (car, motorcycle, bus, truck)
+DETECT_ALL_OBJECTS = os.getenv('DETECT_ALL_OBJECTS', 'true').lower() == 'true'
+
+# COCO class names for display
+COCO_CLASSES = [
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck',
+    'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
+    'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra',
+    'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+    'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
+    'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
+    'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
+    'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+    'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse',
+    'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+    'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
+    'toothbrush'
+]
+
 # Flask app
 app = Flask(__name__)
 CORS(app)
@@ -98,10 +119,14 @@ def box_center(box):
     x1, y1, x2, y2 = box
     return ((x1 + x2) / 2, (y1 + y2) / 2)
 
-def detect_vehicles(image):
+def detect_objects(image):
     """
-    Detect vehicles in image using YOLO
-    Returns list of detected vehicle bounding boxes
+    Detect objects in image using YOLO
+    
+    When DETECT_ALL_OBJECTS=True: Detects ALL objects (for demo/testing)
+    When DETECT_ALL_OBJECTS=False: Detects only vehicles (car, motorcycle, bus, truck)
+    
+    Returns list of detected object bounding boxes
     """
     if model is None:
         print("Model not loaded!")
@@ -110,25 +135,34 @@ def detect_vehicles(image):
     # Run inference
     results = model(image, conf=CONFIDENCE_THRESHOLD, verbose=False)
     
-    vehicles = []
+    # Vehicle class IDs in COCO dataset
+    VEHICLE_CLASSES = [2, 3, 5, 7]  # car, motorcycle, bus, truck
+    
+    objects = []
     for result in results:
         boxes = result.boxes
         for box in boxes:
             cls = int(box.cls[0])
             conf = float(box.conf[0])
             
-            # Class IDs for vehicles in COCO dataset:
-            # 2: car, 3: motorcycle, 5: bus, 7: truck
-            if cls in [2, 3, 5, 7]:
+            # Check if we should include this object
+            if DETECT_ALL_OBJECTS or cls in VEHICLE_CLASSES:
                 xyxy = box.xyxy[0].tolist()
-                vehicles.append({
+                class_name = COCO_CLASSES[cls] if cls < len(COCO_CLASSES) else f"class_{cls}"
+                objects.append({
                     'box': xyxy,
                     'class': cls,
+                    'class_name': class_name,
                     'confidence': conf,
                     'center': box_center(xyxy)
                 })
     
-    return vehicles
+    return objects
+
+# Alias for backward compatibility
+def detect_vehicles(image):
+    """Alias for detect_objects (backward compatibility)"""
+    return detect_objects(image)
 
 def analyze_parking_slots(image, vehicles):
     """

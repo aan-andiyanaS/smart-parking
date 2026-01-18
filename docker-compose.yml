@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ===========================================
   # NGINX - CDN / Reverse Proxy
@@ -35,7 +33,10 @@ services:
       - MINIO_USE_SSL=false
       - PORT=8080
       - GIN_MODE=release
-      - AI_SERVICE_URL=http://ai-service:5000
+      # AI Service runs on HOST (outside Docker)
+      # Use host.docker.internal to access host's localhost from container
+      - AI_SERVICE_URL=http://host.docker.internal:5000
+      - ESP32_STREAM_URL=${ESP32_STREAM_URL:-http://192.168.1.100}
     ports:
       - "8080:8080"
     depends_on:
@@ -84,8 +85,8 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # MinIO Console
+      - "9000:9000"
+      - "9001:9001"
     networks:
       - parking-network
     restart: unless-stopped
@@ -102,30 +103,25 @@ services:
       /bin/sh -c " sleep 5; mc alias set myminio http://minio:9000 minioadmin minioadmin123; mc mb myminio/parking-images --ignore-existing; mc anonymous set public myminio/parking-images; echo 'Bucket created successfully!'; exit 0; "
     networks:
       - parking-network
-  # # ===========================================
-  # # AI SERVICE - YOLO Detection
-  # # ===========================================
-  # ai-service:
-  #   build:
-  #     context: ./ai-service
-  #     dockerfile: Dockerfile
-  #   container_name: parking-ai
-  #   environment:
-  #     - BACKEND_URL=http://backend:8080
-  #     - YOLO_MODEL=yolo11n.pt
-  #     - PORT=5000
-  #   volumes:
-  #     - ./ai-service/parking_regions.json:/app/parking_regions.json:ro
-  #   ports:
-  #     - "5000:5000"
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - parking-network
-  #   restart: unless-stopped
-  # ===========================================
-  # VOLUMES
-  # ===========================================
+
+# ===========================================
+# AI SERVICE - Runs OUTSIDE Docker (manually)
+# ===========================================
+# AI Service is NOT in Docker because:
+# 1. YOLO/PyTorch benefits from native GPU access
+# 2. Conda environment management is easier
+# 3. Faster iteration during development
+#
+# To run AI Service:
+#   cd ai-service
+#   conda activate smartparking
+#   python main.py
+#
+# Backend connects via: AI_SERVICE_URL=http://host.docker.internal:5000
+
+# ===========================================
+# VOLUMES
+# ===========================================
 volumes:
   postgres_data:
     driver: local

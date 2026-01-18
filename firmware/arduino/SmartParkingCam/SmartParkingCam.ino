@@ -29,30 +29,49 @@
 // ===========================================
 // CONFIGURATION - EDIT THESE!
 // ===========================================
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* BACKEND_URL = "http://YOUR_BACKEND_IP:8080";
-const char* AI_SERVICE_URL = "http://YOUR_AI_SERVICE_IP:5000";
+const char* WIFI_SSID = "ANS030005";
+const char* WIFI_PASSWORD = "71311311203";
+const char* BACKEND_URL = "http://10.93.213.141:8080";
+const char* AI_SERVICE_URL = "http://10.93.213.141:5000";
 
 // ===========================================
 // PIN DEFINITIONS - ESP32-S3 CAM
 // ===========================================
-#define PWDN_GPIO_NUM     -1
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM     10
-#define SIOD_GPIO_NUM     40
-#define SIOC_GPIO_NUM     39
-#define Y9_GPIO_NUM       48
-#define Y8_GPIO_NUM       11
-#define Y7_GPIO_NUM       12
-#define Y6_GPIO_NUM       14
-#define Y5_GPIO_NUM       16
-#define Y4_GPIO_NUM       18
-#define Y3_GPIO_NUM       17
-#define Y2_GPIO_NUM       15
-#define VSYNC_GPIO_NUM    38
-#define HREF_GPIO_NUM     47
-#define PCLK_GPIO_NUM     13
+// #define PWDN_GPIO_NUM     -1
+// #define RESET_GPIO_NUM    -1
+// #define XCLK_GPIO_NUM     10
+// #define SIOD_GPIO_NUM     40
+// #define SIOC_GPIO_NUM     39
+// #define Y9_GPIO_NUM       48
+// #define Y8_GPIO_NUM       11
+// #define Y7_GPIO_NUM       12
+// #define Y6_GPIO_NUM       14
+// #define Y5_GPIO_NUM       16
+// #define Y4_GPIO_NUM       18
+// #define Y3_GPIO_NUM       17
+// #define Y2_GPIO_NUM       15
+// #define VSYNC_GPIO_NUM    38
+// #define HREF_GPIO_NUM     47
+// #define PCLK_GPIO_NUM     13
+
+#define PWDN_GPIO_NUM     -1    // Power down tidak digunakan
+#define RESET_GPIO_NUM    -1    // Reset tidak digunakan
+#define XCLK_GPIO_NUM     15    // External clock
+#define SIOD_GPIO_NUM     4     // I2C SDA (camera control)
+#define SIOC_GPIO_NUM     5     // I2C SCL (camera control)
+
+#define Y9_GPIO_NUM       16    // Data bit 7
+#define Y8_GPIO_NUM       17    // Data bit 6
+#define Y7_GPIO_NUM       18    // Data bit 5
+#define Y6_GPIO_NUM       12    // Data bit 4
+#define Y5_GPIO_NUM       10    // Data bit 3
+#define Y4_GPIO_NUM       8     // Data bit 2
+#define Y3_GPIO_NUM       9     // Data bit 1
+#define Y2_GPIO_NUM       11    // Data bit 0
+
+#define VSYNC_GPIO_NUM    6     // Vertical sync
+#define HREF_GPIO_NUM     7     // Horizontal reference
+#define PCLK_GPIO_NUM     13    // Pixel clock
 
 // LCD I2C pins
 #define LCD_SDA           21

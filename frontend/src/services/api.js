@@ -1,9 +1,10 @@
 import axios from 'axios'
 
 // Create axios instance
+// When VITE_API_URL is not set, use relative paths (for nginx proxy)
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || '',
-    timeout: 10000,
+    timeout: 30000,
     headers: {
         'Content-Type': 'application/json',
     },
