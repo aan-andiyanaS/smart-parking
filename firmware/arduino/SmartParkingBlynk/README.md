@@ -160,65 +160,226 @@ const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
 ## 🔄 Cara Kerja Sistem
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    SMART PARKING SYSTEM                      │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│   [Sensor Entry]                    [Sensor Exit]            │
-│        │                                  │                  │
-│        ▼                                  ▼                  │
-│   Deteksi < 5cm                     Deteksi < 5cm            │
-│        │                                  │                  │
-│        ▼                                  ▼                  │
-│   ┌─────────────┐                   ┌─────────────┐          │
-│   │ Ada slot?   │                   │ Ada mobil   │          │
-│   │ tersedia?   │                   │ di dalam?   │          │
-│   └──────┬──────┘                   └──────┬──────┘          │
-│          │                                 │                  │
-│     YA   │   TIDAK                    YA   │                  │
-│          ▼      ▼                          ▼                  │
-│   [Buka Gate] [Buzzer 3x]           [Buka Gate]              │
-│   [occupied++] [LCD: PENUH]         [occupied--]             │
-│   [entry++]                         [exit++]                 │
-│          │                                 │                  │
-│          └────────────┬────────────────────┘                  │
-│                       ▼                                       │
-│              ┌─────────────────┐                              │
-│              │   Update Blynk  │                              │
-│              │   Update LCD    │                              │
-│              │   Update LED    │                              │
-│              └─────────────────┘                              │
-│                       │                                       │
-│                       ▼                                       │
-│              ┌─────────────────┐                              │
-│              │  Blynk Cloud    │◄──── 📱 Smartphone App       │
-│              │  (Real-time)    │                              │
-│              └─────────────────┘                              │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Fitur Sensor Cooldown
-
-Untuk mencegah konflik pada single gate:
+### Arsitektur Sistem
 
 ```
-Sensor Entry aktif  →  Sensor Exit dinonaktifkan 5 detik
-Sensor Exit aktif   →  Sensor Entry dinonaktifkan 5 detik
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           HARDWARE LAYER                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────┐  ┌─────────┐  ┌─────┐ │
+│  │ US Entry     │  │ US Exit      │  │ Servo   │  │ LCD I2C │  │ LED │ │
+│  │ (HC-SR04)    │  │ (HC-SR04)    │  │ (SG90)  │  │ (16x2)  │  │     │ │
+│  └──────┬───────┘  └──────┬───────┘  └────┬────┘  └────┬────┘  └──┬──┘ │
+│         │                 │               │            │          │    │
+│         └─────────────────┴───────────────┴────────────┴──────────┘    │
+│                                   │                                     │
+│                                   ▼                                     │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                    ESP32-S3 (Microcontroller)                   │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │   │
+│  │  │ Sensor Task │  │ Gate Task   │  │ Blynk Communication     │  │   │
+│  │  │ (100ms loop)│  │ (100ms loop)│  │ (1000ms sync)           │  │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                   │                                     │
+└───────────────────────────────────┼─────────────────────────────────────┘
+                                    │ WiFi
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           CLOUD LAYER                                   │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                      BLYNK CLOUD SERVER                         │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │   │
+│  │  │ Datastreams │  │ Event Log   │  │ Device Management       │  │   │
+│  │  │ V0-V9       │  │ (Terminal)  │  │ (Online/Offline)        │  │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                   │                                     │
+└───────────────────────────────────┼─────────────────────────────────────┘
+                                    │ Internet
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        APPLICATION LAYER                                │
+│  ┌─────────────────────┐              ┌─────────────────────┐          │
+│  │   📱 Blynk Mobile   │              │   💻 Blynk Web      │          │
+│  │   (iOS/Android)     │              │   (Console)         │          │
+│  └─────────────────────┘              └─────────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Data yang Dikirim ke Blynk
+---
 
-| Data | Update | Keterangan |
-|------|--------|------------|
-| Slot tersedia | Real-time | Setiap ada entry/exit |
-| Slot terisi | Real-time | Setiap ada entry/exit |
-| Status gate | Real-time | Saat gate buka/tutup |
-| Entry count | Real-time | Counter harian |
-| Exit count | Real-time | Counter harian |
-| Occupancy rate | 1 detik | Persentase terisi |
-| Event log | Real-time | Terminal history |
+### Detail Proses Entry (Kendaraan Masuk)
+
+```
+ Waktu    Aksi
+  0ms     Sensor Entry mendeteksi objek < 5cm
+          │
+  1ms     ├─► Cek cooldown: exitSensorCooldownUntil sudah lewat?
+          │   └─► TIDAK: Abaikan (sensor dalam cooldown)
+          │   └─► YA: Lanjut proses
+          │
+  2ms     ├─► Cek availableSlots > 0?
+          │   │
+          │   ├─► YA (ada slot):
+          │   │   ├─► openGate() → Servo ke 90°
+          │   │   ├─► occupiedSlots++ (1 → 2)
+          │   │   ├─► availableSlots = TOTAL - occupied (4-2=2)
+          │   │   ├─► entryCount++ (0 → 1)
+          │   │   ├─► beep(1) → Buzzer 1x
+          │   │   ├─► LCD: "SELAMAT DATANG!"
+          │   │   ├─► Blynk.virtualWrite(V0, availableSlots)
+          │   │   ├─► Blynk.virtualWrite(V1, occupiedSlots)
+          │   │   ├─► Blynk.virtualWrite(V4, entryCount)
+          │   │   └─► Terminal: "🚗 ENTRY: Vehicle entered"
+          │   │
+          │   └─► TIDAK (parkir penuh):
+          │       ├─► beep(3) → Buzzer 3x (warning)
+          │       ├─► LCD: "PARKIR PENUH!"
+          │       └─► Terminal: "❌ FULL: Entry denied"
+          │
+  3ms     └─► Set cooldown: exitSensorCooldownUntil = now + 5000ms
+              (Sensor exit dinonaktifkan selama 5 detik)
+          
+ 5000ms   Gate otomatis tertutup (checkAutoCloseGate)
+          └─► Servo ke 0°
+```
+
+---
+
+### Detail Proses Exit (Kendaraan Keluar)
+
+```
+ Waktu    Aksi
+  0ms     Sensor Exit mendeteksi objek < 5cm
+          │
+  1ms     ├─► Cek cooldown: entrySensorCooldownUntil sudah lewat?
+          │   └─► TIDAK: Abaikan
+          │   └─► YA: Lanjut proses
+          │
+  2ms     ├─► Cek occupiedSlots > 0? (ada kendaraan di dalam?)
+          │   │
+          │   └─► YA:
+          │       ├─► openGateForExit() → Servo ke 90°
+          │       ├─► occupiedSlots-- (2 → 1)
+          │       ├─► availableSlots = TOTAL - occupied (4-1=3)
+          │       ├─► exitCount++ (0 → 1)
+          │       ├─► beep(1) → Buzzer 1x
+          │       ├─► LCD: "TERIMA KASIH!"
+          │       └─► Update Blynk (V0, V1, V5)
+          │
+  3ms     └─► Set cooldown: entrySensorCooldownUntil = now + 5000ms
+```
+
+---
+
+### Mekanisme Sensor Cooldown
+
+Cooldown digunakan untuk menghindari **double-trigger** ketika kedua sensor dipasang berdekatan (single gate):
+
+```
+Skenario TANPA Cooldown (MASALAH):
+──────────────────────────────────
+Kendaraan masuk → Sensor Entry aktif → Entry dicatat
+                  Kendaraan masih bergerak...
+                  Sensor Exit juga aktif → Exit dicatat (SALAH!)
+                  
+Hasil: Entry +1, Exit +1 (padahal baru masuk)
+
+
+Skenario DENGAN Cooldown (BENAR):
+─────────────────────────────────
+Kendaraan masuk → Sensor Entry aktif → Entry dicatat
+                  exitSensorCooldownUntil = now + 5000
+                  │
+                  │ Dalam 5 detik:
+                  │ Sensor Exit aktif → DIABAIKAN (dalam cooldown)
+                  │
+                  ▼ Setelah 5 detik:
+                  Sensor Exit siap digunakan lagi
+                  
+Hasil: Entry +1 saja (benar!)
+```
+
+**Nilai Cooldown**: 5000ms (5 detik) - cukup untuk kendaraan melewati gate
+
+---
+
+### State Variables (Variabel Status)
+
+```cpp
+// Tracking slot parkir
+int occupiedSlots = 0;     // Jumlah slot terisi (0-4)
+int availableSlots = 4;    // Jumlah slot tersedia (TOTAL - occupied)
+int TOTAL_SLOTS = 4;       // Kapasitas maksimum
+
+// Tracking gate
+bool gateOpen = false;     // Status gate (true = terbuka)
+unsigned long gateOpenTime; // Waktu gate dibuka (untuk auto-close)
+
+// Counter harian
+int entryCount = 0;        // Total kendaraan masuk hari ini
+int exitCount = 0;         // Total kendaraan keluar hari ini
+
+// Cooldown timestamp
+unsigned long entrySensorCooldownUntil = 0;  // Entry sensor aktif setelah waktu ini
+unsigned long exitSensorCooldownUntil = 0;   // Exit sensor aktif setelah waktu ini
+```
+
+---
+
+### Timing & Interval
+
+| Task | Interval | Fungsi |
+|------|----------|--------|
+| `checkSensors()` | 100ms | Baca sensor ultrasonic |
+| `updateBlynk()` | 1000ms | Sync data ke Blynk Cloud |
+| `updateLCD()` | 500ms | Refresh tampilan LCD |
+| `checkAutoCloseGate()` | 100ms | Cek apakah gate perlu ditutup |
+| Gate auto-close | 5000ms | Durasi gate terbuka sebelum otomatis tutup |
+| Sensor cooldown | 5000ms | Jeda antar aktivasi sensor |
+
+---
+
+### Komunikasi dengan Blynk
+
+**Data yang dikirim ESP32 → Blynk Cloud:**
+
+```cpp
+Blynk.virtualWrite(V0, availableSlots);  // Slot tersedia
+Blynk.virtualWrite(V1, occupiedSlots);   // Slot terisi
+Blynk.virtualWrite(V2, TOTAL_SLOTS);     // Total kapasitas
+Blynk.virtualWrite(V3, "OPEN/CLOSED");   // Status gate
+Blynk.virtualWrite(V4, entryCount);      // Counter entry
+Blynk.virtualWrite(V5, exitCount);       // Counter exit
+Blynk.virtualWrite(V8, occupancyRate);   // Persentase terisi (0-100%)
+Blynk.virtualWrite(V9, "Entry - 5");     // Event terakhir
+terminal.println("🚗 ENTRY: ...");       // Log ke terminal (V7)
+```
+
+**Data yang diterima Blynk → ESP32:**
+
+```cpp
+BLYNK_WRITE(V6) {  // Tombol gate di app ditekan
+  int value = param.asInt();
+  if (value == 1) {
+    // Toggle gate buka/tutup
+  }
+}
+```
+
+---
+
+### Perhitungan Occupancy Rate
+
+```cpp
+int occupancyRate = (occupiedSlots * 100) / TOTAL_SLOTS;
+
+// Contoh:
+// occupiedSlots = 3, TOTAL_SLOTS = 4
+// occupancyRate = (3 * 100) / 4 = 75%
+```
+
+Ditampilkan sebagai **Gauge** di Blynk app (0-100%)
 
 ---
 
