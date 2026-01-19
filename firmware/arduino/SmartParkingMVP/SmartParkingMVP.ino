@@ -9,9 +9,9 @@
  * - Monitoring via Blynk (4 widget)
  */
 
-#define BLYNK_TEMPLATE_ID "TMPL65mz3asUW"
-#define BLYNK_TEMPLATE_NAME "SmartParkingMVP"
-#define BLYNK_AUTH_TOKEN "0VoG_z3RBqFMHFjWq17CulMKNYiAZ1Y9"
+#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"
+#define BLYNK_TEMPLATE_NAME "Smart Parking"
+#define BLYNK_AUTH_TOKEN "YOUR_AUTH_TOKEN"
 
 #define BLYNK_PRINT Serial
 
@@ -31,6 +31,7 @@ const char* pass = "71311311203";
 #define US_EXIT_TRIG   42
 #define US_EXIT_ECHO   41
 #define SERVO_PIN      14
+#define BUZZER_PIN     7
 #define I2C_SDA        21
 #define I2C_SCL        20
 
@@ -71,11 +72,13 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print("MVP v1.0");
   
-  // Sensors
+  // Sensors & Buzzer
   pinMode(US_ENTRY_TRIG, OUTPUT);
   pinMode(US_ENTRY_ECHO, INPUT);
   pinMode(US_EXIT_TRIG, OUTPUT);
   pinMode(US_EXIT_ECHO, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
   
   // Servo
   ESP32PWM::allocateTimer(1);
@@ -127,15 +130,19 @@ void checkSensors() {
     float d = getDistance(US_ENTRY_TRIG, US_ENTRY_ECHO);
     if (d > 0 && d < DETECT_DISTANCE && !gateOpen) {
       if (available > 0) {
+        beep(1);  // Bip sekali
         Blynk.virtualWrite(V_VEHICLE, "🚗 Mobil MASUK");
+        Blynk.logEvent("vehicle_entry", "Kendaraan masuk. Slot tersisa: " + String(available - 1));
         openGate("MASUK");
         occupied++;
         available = TOTAL_SLOTS - occupied;
         Blynk.virtualWrite(V_AVAILABLE, available);
       } else {
+        beepFast(5);  // Bip cepat 5x - PENUH!
         lcd.clear();
         lcd.print("PARKIR PENUH!");
         Blynk.virtualWrite(V_VEHICLE, "❌ PENUH - Ditolak");
+        Blynk.logEvent("parking_full", "Parkir PENUH! Kendaraan ditolak masuk.");
         delay(2000);
       }
       exitCooldown = now + COOLDOWN_MS;
@@ -147,7 +154,9 @@ void checkSensors() {
   if (now > entryCooldown) {
     float d = getDistance(US_EXIT_TRIG, US_EXIT_ECHO);
     if (d > 0 && d < DETECT_DISTANCE && !gateOpen && occupied > 0) {
+      beep(1);  // Bip sekali
       Blynk.virtualWrite(V_VEHICLE, "🚙 Mobil KELUAR");
+      Blynk.logEvent("vehicle_exit", "Kendaraan keluar. Slot tersedia: " + String(available + 1));
       openGate("KELUAR");
       occupied--;
       available = TOTAL_SLOTS - occupied;
@@ -155,6 +164,25 @@ void checkSensors() {
       entryCooldown = now + COOLDOWN_MS;
       updateDisplay();
     }
+  }
+}
+
+// ===== BUZZER =====
+void beep(int times) {
+  for (int i = 0; i < times; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(150);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(100);
+  }
+}
+
+void beepFast(int times) {
+  for (int i = 0; i < times; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(50);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(50);
   }
 }
 

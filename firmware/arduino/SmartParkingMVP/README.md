@@ -9,7 +9,8 @@
 - ✅ 2 Sensor Ultrasonic (Entry/Exit)
 - ✅ Servo Gate otomatis
 - ✅ LCD Status
-- ✅ **3 Widget Blynk saja**
+- ✅ **Buzzer** (notifikasi suara)
+- ✅ **4 Widget Blynk + Notifikasi**
 
 ---
 
@@ -83,6 +84,15 @@ LCD I2C             ESP32-S3
    SCL    ─────────►  GPIO 20
 ```
 
+#### 5️⃣ Buzzer Aktif
+
+```
+Buzzer              ESP32-S3
+──────              ────────
+   (+)    ─────────►  GPIO 7
+   (-)    ─────────►  GND
+```
+
 ### Tabel Ringkasan Pin
 
 | Komponen | Pin ESP32 | Warna Kabel (Saran) |
@@ -106,18 +116,21 @@ LCD I2C             ESP32-S3
 | SDA | GPIO 21 | Biru |
 | SCL | GPIO 20 | Putih |
 | GND | GND | Hitam |
+| **Buzzer** | | |
+| (+) | GPIO 7 | Merah |
+| (-) | GND | Hitam |
 
 ### Layout Fisik di Breadboard
 
 ```
      [ESP32-S3 WROOM]
            │
-     ══════╪══════════════════════════════════
+     ══════╪══════════════════════════════
            │
-    ┌──────┴──────┐
-    │             │
-    │  LCD 16x2   │
-    │   I2C       │
+    ┌──────┴──────┐      ┌────────┐
+    │             │      │ BUZZER │
+    │  LCD 16x2   │      │  🔊     │
+    │   I2C       │      └────────┘
     └─────────────┘
     
     
@@ -131,6 +144,14 @@ LCD I2C             ESP32-S3
          └─────►║  (SERVO)  ║◄─────────┘
                 ╚═══════════╝
 ```
+
+### 🔊 Behavior Buzzer
+
+| Event | Bunyi Buzzer |
+|-------|-------------|
+| Mobil MASUK | Bip 1x (150ms) |
+| Mobil KELUAR | Bip 1x (150ms) |
+| Parkir PENUH | Bip cepat 5x (50ms) |
 
 ---
 
@@ -151,6 +172,26 @@ Di https://blynk.cloud:
 | V1 | Vehicle | String | - | - | Status mobil |
 | V2 | GateStatus | String | - | - | Status pintu |
 | V3 | GateButton | Integer | 0 | 1 | Tombol kontrol |
+
+### 2b. Tambah Events (Notifikasi Push)
+
+Di tab **Events**, tambahkan 3 event:
+
+| Event Code | Name | Type | Description |
+|------------|------|------|-------------|
+| `vehicle_entry` | Kendaraan Masuk | Notification | Notif saat mobil masuk |
+| `vehicle_exit` | Kendaraan Keluar | Notification | Notif saat mobil keluar |
+| `parking_full` | Parkir Penuh | Warning | Notif saat parkir penuh |
+
+**Cara membuat Event:**
+1. Klik tab **Events** di template
+2. Klik **+ Add Event**
+3. Isi:
+   - **Event Code**: `vehicle_entry`
+   - **Event Name**: `Kendaraan Masuk`
+   - **Type**: `Notification`
+   - Centang **Send Notification**
+4. Ulangi untuk `vehicle_exit` dan `parking_full`
 
 ### 3. Buat Dashboard
 
