@@ -79,7 +79,7 @@ const char* AI_SERVICE_URL = "http://YOUR_AI_SERVICE_IP:5000"; // AI service
 // ===========================================
 // CONSTANTS
 // ===========================================
-#define DETECTION_DISTANCE_CM   30    // Distance threshold for vehicle detection
+#define DETECTION_DISTANCE_CM   5     // Distance threshold for vehicle detection (5cm)
 #define GATE_OPEN_ANGLE         90    // Servo angle when gate is open
 #define GATE_CLOSE_ANGLE        0     // Servo angle when gate is closed
 #define GATE_OPEN_DURATION_MS   5000  // How long gate stays open

@@ -82,7 +82,7 @@ const char* AI_SERVICE_URL = "http://YOUR_AI_SERVICE_IP:5000";
 #define GATE_OPEN_ANGLE       90
 #define GATE_CLOSED_ANGLE     0
 #define VEHICLE_DETECT_MM     200
-#define VEHICLE_DETECT_CM     30    // For ultrasonic sensors
+#define VEHICLE_DETECT_CM     5     // For ultrasonic sensors (5cm)
 #define DETECTION_INTERVAL_MS 5000
 #define STATS_INTERVAL_MS     5000
 #define STREAM_FRAME_DELAY_MS 50
