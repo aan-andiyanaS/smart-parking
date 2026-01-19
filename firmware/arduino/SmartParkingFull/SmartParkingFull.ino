@@ -31,10 +31,10 @@
 // ===========================================
 // CONFIGURATION - EDIT THESE!
 // ===========================================
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* BACKEND_URL = "http://YOUR_BACKEND_IP:8080";
-const char* AI_SERVICE_URL = "http://YOUR_AI_SERVICE_IP:5000";
+const char* WIFI_SSID = "ANS030005";
+const char* WIFI_PASSWORD = "71311311203";
+const char* BACKEND_URL = "http://10.93.213.141:8080";
+const char* AI_SERVICE_URL = "http://10.93.213.141:5000";
 
 // ===========================================
 // PIN DEFINITIONS - Freenove ESP32-S3 WROOM CAM
