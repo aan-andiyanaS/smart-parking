@@ -10,7 +10,6 @@ import (
 type Session struct {
 	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	SlotID          *uuid.UUID `gorm:"type:uuid" json:"slot_id,omitempty"`
-	PlateNumber     string     `gorm:"type:varchar(20)" json:"plate_number,omitempty"`
 	EntryTime       time.Time  `gorm:"autoCreateTime" json:"entry_time"`
 	ExitTime        *time.Time `json:"exit_time,omitempty"`
 	DurationMinutes *int       `json:"duration_minutes,omitempty"`

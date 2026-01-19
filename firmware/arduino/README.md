@@ -45,6 +45,7 @@ arduino/
 - Gate otomatis buka/tutup
 - Deteksi kendaraan di gate
 - Buzzer notifikasi
+- **Session Tracking** - Kirim event entry/exit ke backend
 
 **Gunakan ini jika:** Punya semua komponen lengkap.
 
@@ -101,3 +102,25 @@ Setelah upload, buka browser ke `http://<ESP32_IP>/`:
 | `/restart` | Remote restart |
 | `/gate/open` | Buka gate (Full only) |
 | `/gate/close` | Tutup gate (Full only) |
+
+---
+
+## 📊 Session Tracking (Full Version)
+
+Firmware Full Version akan otomatis mengirim event ke Backend saat kendaraan terdeteksi:
+
+| Event | Endpoint Backend | Trigger |
+|-------|------------------|---------|
+| Entry | `POST /api/sessions/entry` | Sensor ToF deteksi kendaraan masuk |
+| Exit | `POST /api/sessions/exit` | Sensor ultrasonic deteksi kendaraan keluar |
+
+**Payload yang dikirim:**
+```json
+{
+  "camera_id": "esp32-main",
+  "event_type": "entry"  // atau "exit"
+}
+```
+
+> ⚠️ **Catatan:** Backend perlu menyediakan endpoint `/api/sessions/entry` dan `/api/sessions/exit` untuk menerima event ini.
+

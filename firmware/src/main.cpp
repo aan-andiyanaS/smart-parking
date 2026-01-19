@@ -86,6 +86,7 @@ const char* AI_SERVICE_URL = "http://YOUR_AI_SERVICE_IP:5000"; // AI service
 #define DETECTION_INTERVAL_MS   5000  // Run YOLO detection every 5 seconds
 #define STATS_INTERVAL_MS       5000  // Fetch stats every 5 seconds
 #define STREAM_FRAME_DELAY_MS   50    // ~20 FPS for stream
+#define SENSOR_COOLDOWN_MS      5000  // Cooldown between entry/exit sensor activation
 
 // ===========================================
 // GLOBAL OBJECTS
@@ -102,6 +103,10 @@ unsigned long lastDetectionTime = 0;
 unsigned long lastStatsTime = 0;
 unsigned long gateOpenTime = 0;
 bool streamActive = false;
+
+// Sensor cooldown state (for single gate setup)
+unsigned long entrySensorCooldownUntil = 0;  // Entry sensor disabled until this time
+unsigned long exitSensorCooldownUntil = 0;   // Exit sensor disabled until this time
 
 // MJPEG stream boundary
 #define PART_BOUNDARY "123456789000000000000987654321"
@@ -130,6 +135,8 @@ void updateLEDs();
 void beep(int times);
 void runDetection();
 void fetchStats();
+void sendEntryEvent();
+void sendExitEvent();
 
 // ===========================================
 // SETUP
@@ -226,15 +233,27 @@ void loop() {
     unsigned long currentTime = millis();
     
     // Check Entry sensor (vehicle wants to enter)
-    float entryDistance = measureDistance(US1_TRIG_PIN, US1_ECHO_PIN);
-    if (entryDistance > 0 && entryDistance < DETECTION_DISTANCE_CM) {
-        handleEntry();
+    // Only check if exit sensor cooldown has expired
+    if (currentTime > exitSensorCooldownUntil) {
+        float entryDistance = measureDistance(US1_TRIG_PIN, US1_ECHO_PIN);
+        if (entryDistance > 0 && entryDistance < DETECTION_DISTANCE_CM) {
+            handleEntry();
+            // Set cooldown: disable exit sensor for a few seconds
+            exitSensorCooldownUntil = currentTime + SENSOR_COOLDOWN_MS;
+            Serial.printf("[SENSOR] Entry triggered, exit sensor disabled for %d ms\n", SENSOR_COOLDOWN_MS);
+        }
     }
     
     // Check Exit sensor (vehicle wants to exit)
-    float exitDistance = measureDistance(US2_TRIG_PIN, US2_ECHO_PIN);
-    if (exitDistance > 0 && exitDistance < DETECTION_DISTANCE_CM) {
-        handleExit();
+    // Only check if entry sensor cooldown has expired
+    if (currentTime > entrySensorCooldownUntil) {
+        float exitDistance = measureDistance(US2_TRIG_PIN, US2_ECHO_PIN);
+        if (exitDistance > 0 && exitDistance < DETECTION_DISTANCE_CM) {
+            handleExit();
+            // Set cooldown: disable entry sensor for a few seconds
+            entrySensorCooldownUntil = currentTime + SENSOR_COOLDOWN_MS;
+            Serial.printf("[SENSOR] Exit triggered, entry sensor disabled for %d ms\n", SENSOR_COOLDOWN_MS);
+        }
     }
     
     // Auto-close gate after timeout
@@ -290,6 +309,9 @@ void handleEntry() {
         openGate();
         beep(1);
         
+        // Send entry event to backend for session tracking
+        sendEntryEvent();
+        
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("SELAMAT DATANG!");
@@ -317,6 +339,9 @@ void handleExit() {
     
     openGate();
     beep(1);
+    
+    // Send exit event to backend for session tracking
+    sendExitEvent();
     
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -683,6 +708,71 @@ void fetchStats() {
                 updateDisplay();
             }
         }
+    }
+    
+    http.end();
+}
+
+// ===========================================
+// SESSION TRACKING - Entry/Exit Events
+// ===========================================
+void sendEntryEvent() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[SESSION] WiFi not connected, skipping entry event");
+        return;
+    }
+    
+    HTTPClient http;
+    String url = String(BACKEND_URL) + "/api/sessions/entry";
+    
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(5000);
+    
+    StaticJsonDocument<128> doc;
+    doc["camera_id"] = "esp32-main";
+    doc["event_type"] = "entry";
+    
+    String body;
+    serializeJson(doc, body);
+    
+    int httpCode = http.POST(body);
+    
+    if (httpCode == 200 || httpCode == 201) {
+        Serial.println("[SESSION] Entry event sent successfully");
+    } else {
+        Serial.printf("[SESSION] Entry event failed: %d\n", httpCode);
+    }
+    
+    http.end();
+}
+
+void sendExitEvent() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[SESSION] WiFi not connected, skipping exit event");
+        return;
+    }
+    
+    HTTPClient http;
+    String url = String(BACKEND_URL) + "/api/sessions/exit";
+    
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(5000);
+    
+    StaticJsonDocument<128> doc;
+    doc["camera_id"] = "esp32-main";
+    doc["event_type"] = "exit";
+    
+    String body;
+    serializeJson(doc, body);
+    
+    int httpCode = http.POST(body);
+    
+    if (httpCode == 200 || httpCode == 201) {
+        Serial.println("[SESSION] Exit event sent successfully");
+    } else {
+        Serial.printf("[SESSION] Exit event failed: %d\n", httpCode);
     }
     
     http.end();

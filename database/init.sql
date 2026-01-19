@@ -35,7 +35,6 @@ CREATE TABLE IF NOT EXISTS captures (
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     slot_id UUID REFERENCES slots(id) ON DELETE SET NULL,
-    plate_number VARCHAR(20),
     entry_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     exit_time TIMESTAMP WITH TIME ZONE,
     duration_minutes INTEGER,

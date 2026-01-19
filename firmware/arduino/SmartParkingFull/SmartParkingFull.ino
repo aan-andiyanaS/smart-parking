@@ -69,15 +69,24 @@ const char* AI_SERVICE_URL = "http://YOUR_AI_SERVICE_IP:5000";
 #define LED_STATUS        6
 #define BUZZER_PIN        7
 
+// Ultrasonic Sensors (Entry & Exit) - for single gate with direction detection
+// Pins sesuai dengan ESP32-S3 WROOM N16R8 (lihat WIRING_GUIDE.md)
+#define US_ENTRY_TRIG     1   // GPIO 1
+#define US_ENTRY_ECHO     2   // GPIO 2
+#define US_EXIT_TRIG      42  // GPIO 42
+#define US_EXIT_ECHO      41  // GPIO 41
+
 // ===========================================
 // CONSTANTS
 // ===========================================
 #define GATE_OPEN_ANGLE       90
 #define GATE_CLOSED_ANGLE     0
 #define VEHICLE_DETECT_MM     200
+#define VEHICLE_DETECT_CM     30    // For ultrasonic sensors
 #define DETECTION_INTERVAL_MS 5000
 #define STATS_INTERVAL_MS     5000
 #define STREAM_FRAME_DELAY_MS 50
+#define SENSOR_COOLDOWN_MS    5000  // Cooldown between entry/exit sensor
 
 // ===========================================
 // GLOBAL OBJECTS
@@ -94,6 +103,11 @@ bool gateOpen = false;
 bool streamActive = false;
 unsigned long lastDetectionTime = 0;
 unsigned long lastStatsTime = 0;
+unsigned long gateOpenTime = 0;
+
+// Sensor cooldown state (for single gate setup)
+unsigned long entrySensorCooldownUntil = 0;
+unsigned long exitSensorCooldownUntil = 0;
 
 // Stream
 #define PART_BOUNDARY "123456789000000000000987654321"
@@ -134,16 +148,23 @@ void setup() {
   gateServo.write(GATE_CLOSED_ANGLE);
   Serial.println("[OK] Servo");
   
-  // ToF Sensor
+  // ToF Sensor (optional, can be used as backup)
   lcd.clear();
-  lcd.print("Init ToF...");
+  lcd.print("Init Sensors...");
   tofSensor.setTimeout(500);
   if (tofSensor.init()) {
     tofSensor.startContinuous();
     Serial.println("[OK] ToF Sensor");
   } else {
-    Serial.println("[WARN] ToF failed");
+    Serial.println("[WARN] ToF failed (using ultrasonic)");
   }
+  
+  // Ultrasonic Sensors (Entry & Exit)
+  pinMode(US_ENTRY_TRIG, OUTPUT);
+  pinMode(US_ENTRY_ECHO, INPUT);
+  pinMode(US_EXIT_TRIG, OUTPUT);
+  pinMode(US_EXIT_ECHO, INPUT);
+  Serial.println("[OK] Ultrasonic Sensors");
   
   // Camera
   lcd.clear();
@@ -361,33 +382,84 @@ void handleRestart() {
 // ===========================================
 // GATE CONTROL
 // ===========================================
-void checkVehicleAtGate() {
-  int distance = tofSensor.readRangeContinuousMillimeters();
-  if (tofSensor.timeoutOccurred()) return;
+
+// Measure distance with ultrasonic sensor
+float measureDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
   
-  if (distance < VEHICLE_DETECT_MM && !gateOpen) {
-    if (availableSlots > 0) {
-      openGate();
-    } else {
-      // Parking full
-      beep(3);
-      lcd.clear();
-      lcd.print("PARKIR PENUH!");
-      delay(2000);
-      updateLCD();
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  if (duration == 0) return -1;
+  return duration * 0.034 / 2;
+}
+
+void checkVehicleAtGate() {
+  unsigned long now = millis();
+  
+  // Check Entry sensor (only if not in cooldown)
+  if (now > exitSensorCooldownUntil) {
+    float entryDistance = measureDistance(US_ENTRY_TRIG, US_ENTRY_ECHO);
+    if (entryDistance > 0 && entryDistance < VEHICLE_DETECT_CM && !gateOpen) {
+      if (availableSlots > 0) {
+        openGate();
+        sendEntryEvent();
+        // Set cooldown: disable exit sensor
+        exitSensorCooldownUntil = now + SENSOR_COOLDOWN_MS;
+        Serial.printf("[SENSOR] Entry triggered, exit disabled for %d ms\n", SENSOR_COOLDOWN_MS);
+      } else {
+        beep(3);
+        lcd.clear();
+        lcd.print("PARKIR PENUH!");
+        delay(2000);
+        updateLCD();
+      }
     }
+  }
+  
+  // Check Exit sensor (only if not in cooldown)
+  if (now > entrySensorCooldownUntil) {
+    float exitDistance = measureDistance(US_EXIT_TRIG, US_EXIT_ECHO);
+    if (exitDistance > 0 && exitDistance < VEHICLE_DETECT_CM && !gateOpen) {
+      openGateForExit();
+      sendExitEvent();
+      // Set cooldown: disable entry sensor
+      entrySensorCooldownUntil = now + SENSOR_COOLDOWN_MS;
+      Serial.printf("[SENSOR] Exit triggered, entry disabled for %d ms\n", SENSOR_COOLDOWN_MS);
+    }
+  }
+  
+  // Auto close gate
+  if (gateOpen && gateOpenTime > 0 && (now - gateOpenTime > 5000)) {
+    closeGate();
+    gateOpenTime = 0;
   }
 }
 
 void openGate() {
   gateServo.write(GATE_OPEN_ANGLE);
   gateOpen = true;
+  gateOpenTime = millis();
   beep(1);
   lcd.clear();
   lcd.print("SELAMAT DATANG!");
   lcd.setCursor(0, 1);
   lcd.print("Silakan Masuk");
-  Serial.println("[GATE] Opened");
+  Serial.println("[GATE] Opened for ENTRY");
+}
+
+void openGateForExit() {
+  gateServo.write(GATE_OPEN_ANGLE);
+  gateOpen = true;
+  gateOpenTime = millis();
+  beep(1);
+  lcd.clear();
+  lcd.print("TERIMA KASIH!");
+  lcd.setCursor(0, 1);
+  lcd.print("Hati-hati...");
+  Serial.println("[GATE] Opened for EXIT");
 }
 
 void closeGate() {
@@ -483,4 +555,65 @@ void updateLEDs() {
     digitalWrite(LED_GREEN, LOW);
     digitalWrite(LED_RED, HIGH);
   }
+}
+
+// ===========================================
+// SESSION TRACKING - Entry/Exit Events
+// ===========================================
+void sendEntryEvent() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[SESSION] WiFi not connected, skipping entry event");
+    return;
+  }
+  
+  HTTPClient http;
+  http.begin(String(BACKEND_URL) + "/api/sessions/entry");
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(5000);
+  
+  StaticJsonDocument<128> doc;
+  doc["camera_id"] = "esp32-main";
+  doc["event_type"] = "entry";
+  
+  String body;
+  serializeJson(doc, body);
+  
+  int httpCode = http.POST(body);
+  
+  if (httpCode == 200 || httpCode == 201) {
+    Serial.println("[SESSION] Entry event sent successfully");
+  } else {
+    Serial.printf("[SESSION] Entry event failed: %d\n", httpCode);
+  }
+  
+  http.end();
+}
+
+void sendExitEvent() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[SESSION] WiFi not connected, skipping exit event");
+    return;
+  }
+  
+  HTTPClient http;
+  http.begin(String(BACKEND_URL) + "/api/sessions/exit");
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(5000);
+  
+  StaticJsonDocument<128> doc;
+  doc["camera_id"] = "esp32-main";
+  doc["event_type"] = "exit";
+  
+  String body;
+  serializeJson(doc, body);
+  
+  int httpCode = http.POST(body);
+  
+  if (httpCode == 200 || httpCode == 201) {
+    Serial.println("[SESSION] Exit event sent successfully");
+  } else {
+    Serial.printf("[SESSION] Exit event failed: %d\n", httpCode);
+  }
+  
+  http.end();
 }

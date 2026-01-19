@@ -86,6 +86,14 @@ func main() {
 		api.GET("/stream/capture", streamHandler.ProxyCapture)
 		api.GET("/stream/status", streamHandler.GetCameraStatus)
 		api.PUT("/stream/url", streamHandler.SetCameraURL)
+
+		// Session endpoints (parking sessions from ESP32 sensors)
+		sessionHandler := handlers.NewSessionHandler(db, hub)
+		api.POST("/sessions/entry", sessionHandler.HandleEntry)
+		api.POST("/sessions/exit", sessionHandler.HandleExit)
+		api.GET("/sessions", sessionHandler.GetAll)
+		api.GET("/sessions/stats", sessionHandler.GetStats)
+		api.GET("/sessions/:id", sessionHandler.GetByID)
 	}
 
 	// WebSocket endpoint
