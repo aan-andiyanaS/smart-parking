@@ -6,12 +6,12 @@
  * - 2x Sensor Ultrasonic (Entry/Exit)
  * - Servo Gate
  * - LCD Display
- * - Monitoring via Blynk (3 widget saja)
+ * - Monitoring via Blynk (4 widget)
  */
 
-#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"
+#define BLYNK_TEMPLATE_ID "TMPL65mz3asUW"
 #define BLYNK_TEMPLATE_NAME "SmartParkingMVP"
-#define BLYNK_AUTH_TOKEN "YOUR_AUTH_TOKEN"
+#define BLYNK_AUTH_TOKEN "0VoG_z3RBqFMHFjWq17CulMKNYiAZ1Y9"
 
 #define BLYNK_PRINT Serial
 
@@ -22,8 +22,8 @@
 #include <LiquidCrystal_I2C.h>
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "YOUR_WIFI_SSID";
-const char* pass = "YOUR_WIFI_PASSWORD";
+const char* ssid = "ANS030005";
+const char* pass = "71311311203";
 
 // ===== PIN SENSOR =====
 #define US_ENTRY_TRIG  1
@@ -34,10 +34,11 @@ const char* pass = "YOUR_WIFI_PASSWORD";
 #define I2C_SDA        21
 #define I2C_SCL        20
 
-// ===== BLYNK VIRTUAL PINS (MVP: 3 widget saja) =====
+// ===== BLYNK VIRTUAL PINS (4 widget) =====
 #define V_AVAILABLE    V0   // Gauge: Slot tersedia
-#define V_STATUS       V1   // Label: Status terakhir
-#define V_GATE         V2   // Button: Buka gate manual
+#define V_VEHICLE      V1   // Label: Status mobil (MASUK/KELUAR)
+#define V_GATE_STATUS  V2   // Label: Status pintu (BUKA/TUTUP)
+#define V_GATE_BTN     V3   // Button: Kontrol manual pintu
 
 // ===== KONSTANTA =====
 #define TOTAL_SLOTS        4
@@ -126,15 +127,15 @@ void checkSensors() {
     float d = getDistance(US_ENTRY_TRIG, US_ENTRY_ECHO);
     if (d > 0 && d < DETECT_DISTANCE && !gateOpen) {
       if (available > 0) {
+        Blynk.virtualWrite(V_VEHICLE, "🚗 Mobil MASUK");
         openGate("MASUK");
         occupied++;
         available = TOTAL_SLOTS - occupied;
         Blynk.virtualWrite(V_AVAILABLE, available);
-        Blynk.virtualWrite(V_STATUS, "🚗 Mobil MASUK");
       } else {
         lcd.clear();
         lcd.print("PARKIR PENUH!");
-        Blynk.virtualWrite(V_STATUS, "❌ PENUH!");
+        Blynk.virtualWrite(V_VEHICLE, "❌ PENUH - Ditolak");
         delay(2000);
       }
       exitCooldown = now + COOLDOWN_MS;
@@ -146,50 +147,61 @@ void checkSensors() {
   if (now > entryCooldown) {
     float d = getDistance(US_EXIT_TRIG, US_EXIT_ECHO);
     if (d > 0 && d < DETECT_DISTANCE && !gateOpen && occupied > 0) {
+      Blynk.virtualWrite(V_VEHICLE, "🚙 Mobil KELUAR");
       openGate("KELUAR");
       occupied--;
       available = TOTAL_SLOTS - occupied;
       Blynk.virtualWrite(V_AVAILABLE, available);
-      Blynk.virtualWrite(V_STATUS, "🚙 Mobil KELUAR");
       entryCooldown = now + COOLDOWN_MS;
       updateDisplay();
     }
   }
 }
 
-// ===== GATE =====
 void openGate(String tipe) {
   gate.write(90);
   gateOpen = true;
   gateTime = millis();
   
+  // Update status pintu ke Blynk
+  Blynk.virtualWrite(V_GATE_STATUS, "🟢 PINTU BUKA");
+  
   lcd.clear();
   if (tipe == "MASUK") {
     lcd.print("SELAMAT DATANG!");
-  } else {
+  } else if (tipe == "KELUAR") {
     lcd.print("TERIMA KASIH!");
+  } else {
+    lcd.print("PINTU TERBUKA");
   }
-  Serial.println("[GATE] " + tipe);
+  Serial.println("[GATE] BUKA - " + tipe);
 }
 
 void autoCloseGate() {
   if (gateOpen && millis() - gateTime > 5000) {
     gate.write(0);
     gateOpen = false;
+    
+    // Update status pintu ke Blynk
+    Blynk.virtualWrite(V_GATE_STATUS, "🔴 PINTU TUTUP");
+    Serial.println("[GATE] TUTUP - Auto");
+    
     updateDisplay();
   }
 }
 
 // Manual gate dari Blynk
-BLYNK_WRITE(V_GATE) {
+BLYNK_WRITE(V_GATE_BTN) {
   if (param.asInt() == 1) {
     if (gateOpen) {
       gate.write(0);
       gateOpen = false;
-      Blynk.virtualWrite(V_STATUS, "Gate TUTUP");
+      Blynk.virtualWrite(V_GATE_STATUS, "🔴 PINTU TUTUP");
+      Blynk.virtualWrite(V_VEHICLE, "📱 Manual: Tutup");
+      Serial.println("[GATE] TUTUP - Manual");
     } else {
+      Blynk.virtualWrite(V_VEHICLE, "📱 Manual: Buka");
       openGate("MANUAL");
-      Blynk.virtualWrite(V_STATUS, "Gate BUKA");
     }
   }
 }
@@ -209,5 +221,6 @@ void updateDisplay() {
 // Sync saat connect
 BLYNK_CONNECTED() {
   Blynk.virtualWrite(V_AVAILABLE, available);
-  Blynk.virtualWrite(V_STATUS, "Online");
+  Blynk.virtualWrite(V_VEHICLE, "✅ Online");
+  Blynk.virtualWrite(V_GATE_STATUS, gateOpen ? "🟢 PINTU BUKA" : "🔴 PINTU TUTUP");
 }
