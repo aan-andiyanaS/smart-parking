@@ -261,9 +261,17 @@ const char* pass = "Password_WiFi";        // Ganti!
 
 ## 🔧 Library yang Diperlukan
 
+Install via Arduino IDE Library Manager:
+
 1. **Blynk** by Volodymyr Shymanskyy
-2. **ESP32Servo** by Kevin Harrington
-3. **LiquidCrystal I2C** by Frank de Brabander
+2. **LiquidCrystal I2C** by Frank de Brabander
+
+> ℹ️ **Catatan:** Servo dikontrol menggunakan LEDC PWM native ESP32, tidak memerlukan library tambahan.
+
+### Board Package
+
+- **esp32** by Espressif Systems (versi 3.x)
+- Board: **ESP32S3 Dev Module**
 
 ---
 

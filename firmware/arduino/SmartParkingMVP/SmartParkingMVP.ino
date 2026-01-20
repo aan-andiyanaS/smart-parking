@@ -9,15 +9,14 @@
  * - Monitoring via Blynk (4 widget)
  */
 
-#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"
-#define BLYNK_TEMPLATE_NAME "Smart Parking"
-#define BLYNK_AUTH_TOKEN "YOUR_AUTH_TOKEN"
+#define BLYNK_TEMPLATE_ID "TMPL65mz3asUW"
+#define BLYNK_TEMPLATE_NAME "SmartParkingMVP"
+#define BLYNK_AUTH_TOKEN "0VoG_z3RBqFMHFjWq17CulMKNYiAZ1Y9"
 
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
-#include <ESP32Servo.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
@@ -44,12 +43,17 @@ const char* pass = "71311311203";
 // ===== KONSTANTA =====
 #define TOTAL_SLOTS        4
 #define DETECT_DISTANCE    5     // cm
-#define COOLDOWN_MS        5000  // 5 detik
+#define COOLDOWN_MS        7000  // 5 detik
 
 // ===== OBJEK =====
-Servo gate;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 BlynkTimer timer;
+
+// Servo PWM config  
+// Untuk ESP32-S3, gunakan resolusi 10-bit agar lebih presisi
+#define SERVO_CHANNEL 0
+#define SERVO_FREQ 50      // 50Hz = 20ms period
+#define SERVO_RESOLUTION 10 // 10-bit = 0-1023
 
 // ===== STATE =====
 int occupied = 0;
@@ -80,11 +84,11 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
   
-  // Servo
-  ESP32PWM::allocateTimer(1);
-  gate.setPeriodHertz(50);
-  gate.attach(SERVO_PIN, 500, 2400);
-  gate.write(0);
+  // Servo menggunakan LEDC PWM (ESP32 Arduino Core 3.x)
+  // ledcAttach(pin, freq, resolution) - API baru
+  ledcAttach(SERVO_PIN, SERVO_FREQ, SERVO_RESOLUTION);
+  setServoAngle(0);  // Posisi awal tertutup
+  delay(500);  // Tunggu servo settle
   
   // Blynk
   lcd.clear();
@@ -111,6 +115,18 @@ void loop() {
   timer.run();
 }
 
+// ===== SERVO CONTROL =====
+void setServoAngle(int angle) {
+  // Servo SG90: pulse 0.5ms (0°) sampai 2.5ms (180°) dalam periode 20ms
+  // Resolusi 10-bit = 1024 steps untuk 20ms
+  // 0.5ms = 1024 * (0.5/20) = 25.6 -> ~26
+  // 2.5ms = 1024 * (2.5/20) = 128
+  int dutyMin = 26;   // 0°
+  int dutyMax = 128;  // 180°
+  int duty = map(angle, 0, 180, dutyMin, dutyMax);
+  ledcWrite(SERVO_PIN, duty);  // API 3.x: pakai pin langsung
+  Serial.printf("[SERVO] Angle: %d, Duty: %d\n", angle, duty);
+}
 // ===== SENSOR =====
 float getDistance(int trig, int echo) {
   digitalWrite(trig, LOW);
@@ -187,7 +203,7 @@ void beepFast(int times) {
 }
 
 void openGate(String tipe) {
-  gate.write(90);
+  setServoAngle(90);  // Buka gate 90 derajat
   gateOpen = true;
   gateTime = millis();
   
@@ -207,7 +223,7 @@ void openGate(String tipe) {
 
 void autoCloseGate() {
   if (gateOpen && millis() - gateTime > 5000) {
-    gate.write(0);
+    setServoAngle(0);  // Tutup gate
     gateOpen = false;
     
     // Update status pintu ke Blynk
@@ -222,7 +238,7 @@ void autoCloseGate() {
 BLYNK_WRITE(V_GATE_BTN) {
   if (param.asInt() == 1) {
     if (gateOpen) {
-      gate.write(0);
+      setServoAngle(0);  // Tutup gate
       gateOpen = false;
       Blynk.virtualWrite(V_GATE_STATUS, "🔴 PINTU TUTUP");
       Blynk.virtualWrite(V_VEHICLE, "📱 Manual: Tutup");
