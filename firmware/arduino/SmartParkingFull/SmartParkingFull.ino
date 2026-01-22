@@ -1,21 +1,21 @@
 /*
  * Smart Parking System - FULL VERSION
- * For Arduino IDE
+ * For Arduino IDE (ESP32 Arduino Core 3.x)
  * 
  * Board: ESP32-S3 Dev Module
  * 
  * Components:
  * - Camera OV2640 (MJPEG streaming)
  * - LCD 16x2 I2C (status display)
- * - Servo Motor (gate control)
- * - VL53L0X ToF Sensor (vehicle detection)
- * - LEDs + Buzzer
+ * - Servo Motor (gate control via LEDC PWM)
+ * - 2x Ultrasonic Sensor (entry/exit detection)
+ * - LEDs
  * 
  * Library yang diperlukan:
- * 1. ESP32Servo by Kevin Harrington
- * 2. LiquidCrystal I2C by Frank de Brabander
- * 3. VL53L0X by Pololu
- * 4. ArduinoJson by Benoit Blanchon
+ * 1. LiquidCrystal I2C by Frank de Brabander
+ * 2. ArduinoJson by Benoit Blanchon
+ * 
+ * Note: Servo menggunakan LEDC PWM native (tidak perlu ESP32Servo)
  */
 
 #include "esp_camera.h"
@@ -23,10 +23,8 @@
 #include <WebServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <ESP32Servo.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <VL53L0X.h>
 
 // ===========================================
 // CONFIGURATION - EDIT THESE!
@@ -67,7 +65,10 @@ const char* AI_SERVICE_URL = "http://10.93.213.141:5000";
 #define LED_GREEN         4
 #define LED_RED           5
 #define LED_STATUS        6
-#define BUZZER_PIN        7
+
+// Servo PWM config (ESP32 Arduino Core 3.x)
+#define SERVO_FREQ 50         // 50Hz = 20ms period
+#define SERVO_RESOLUTION 10   // 10-bit = 0-1023
 
 // Ultrasonic Sensors (Entry & Exit) - for single gate with direction detection
 // Pins sesuai dengan ESP32-S3 WROOM N16R8 (lihat WIRING_GUIDE.md)
@@ -92,9 +93,7 @@ const char* AI_SERVICE_URL = "http://10.93.213.141:5000";
 // GLOBAL OBJECTS
 // ===========================================
 WebServer server(80);
-Servo gateServo;
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-VL53L0X tofSensor;
 
 // State
 int availableSlots = 0;
@@ -130,7 +129,6 @@ void setup() {
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_STATUS, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(LED_STATUS, HIGH);
   
   // LCD
@@ -141,25 +139,15 @@ void setup() {
   lcd.print("Full Version");
   delay(1000);
   
-  // Servo
-  ESP32PWM::allocateTimer(1);
-  gateServo.setPeriodHertz(50);
-  gateServo.attach(SERVO_PIN, 500, 2400);
-  gateServo.write(GATE_CLOSED_ANGLE);
+  // Servo menggunakan LEDC PWM (ESP32 Arduino Core 3.x)
+  ledcAttach(SERVO_PIN, SERVO_FREQ, SERVO_RESOLUTION);
+  setServoAngle(GATE_CLOSED_ANGLE);
+  delay(500);
   Serial.println("[OK] Servo");
   
-  // ToF Sensor (optional, can be used as backup)
+  // Ultrasonic Sensors (Entry & Exit)
   lcd.clear();
   lcd.print("Init Sensors...");
-  tofSensor.setTimeout(500);
-  if (tofSensor.init()) {
-    tofSensor.startContinuous();
-    Serial.println("[OK] ToF Sensor");
-  } else {
-    Serial.println("[WARN] ToF failed (using ultrasonic)");
-  }
-  
-  // Ultrasonic Sensors (Entry & Exit)
   pinMode(US_ENTRY_TRIG, OUTPUT);
   pinMode(US_ENTRY_ECHO, INPUT);
   pinMode(US_EXIT_TRIG, OUTPUT);
@@ -410,9 +398,9 @@ void checkVehicleAtGate() {
         exitSensorCooldownUntil = now + SENSOR_COOLDOWN_MS;
         Serial.printf("[SENSOR] Entry triggered, exit disabled for %d ms\n", SENSOR_COOLDOWN_MS);
       } else {
-        beep(3);
         lcd.clear();
         lcd.print("PARKIR PENUH!");
+        Serial.println("[GATE] Parking FULL - Entry denied");
         delay(2000);
         updateLCD();
       }
@@ -439,10 +427,9 @@ void checkVehicleAtGate() {
 }
 
 void openGate() {
-  gateServo.write(GATE_OPEN_ANGLE);
+  setServoAngle(GATE_OPEN_ANGLE);
   gateOpen = true;
   gateOpenTime = millis();
-  beep(1);
   lcd.clear();
   lcd.print("SELAMAT DATANG!");
   lcd.setCursor(0, 1);
@@ -451,10 +438,9 @@ void openGate() {
 }
 
 void openGateForExit() {
-  gateServo.write(GATE_OPEN_ANGLE);
+  setServoAngle(GATE_OPEN_ANGLE);
   gateOpen = true;
   gateOpenTime = millis();
-  beep(1);
   lcd.clear();
   lcd.print("TERIMA KASIH!");
   lcd.setCursor(0, 1);
@@ -463,19 +449,21 @@ void openGateForExit() {
 }
 
 void closeGate() {
-  gateServo.write(GATE_CLOSED_ANGLE);
+  setServoAngle(GATE_CLOSED_ANGLE);
   gateOpen = false;
   updateLCD();
   Serial.println("[GATE] Closed");
 }
 
-void beep(int times) {
-  for (int i = 0; i < times; i++) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(100);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-  }
+// Servo control using LEDC PWM
+void setServoAngle(int angle) {
+  // Servo SG90: pulse 0.5ms (0°) sampai 2.5ms (180°) dalam periode 20ms
+  // Resolusi 10-bit = 1024 steps untuk 20ms
+  int dutyMin = 26;   // 0°
+  int dutyMax = 128;  // 180°
+  int duty = map(angle, 0, 180, dutyMin, dutyMax);
+  ledcWrite(SERVO_PIN, duty);
+  Serial.printf("[SERVO] Angle: %d, Duty: %d\n", angle, duty);
 }
 
 // ===========================================
