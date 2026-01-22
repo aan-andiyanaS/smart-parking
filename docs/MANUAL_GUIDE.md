@@ -7,12 +7,12 @@
 ## 📋 Daftar Isi
 
 1. [Persyaratan Sistem](#1-persyaratan-sistem)
-2. [Instalasi](#2-instalasi)
+2. [Instalasi Local](#2-instalasi-local)
 3. [Menjalankan Aplikasi](#3-menjalankan-aplikasi)
 4. [Penggunaan Dashboard](#4-penggunaan-dashboard)
 5. [API Documentation](#5-api-documentation)
 6. [Troubleshooting](#6-troubleshooting)
-7. [Deployment ke AWS](#7-deployment-ke-aws)
+7. [Deployment ke Cloud](#7-deployment-ke-cloud)
 
 ---
 
@@ -24,6 +24,8 @@
 |----------|---------------|----------|
 | Docker Desktop | 4.0+ | [Download](https://www.docker.com/products/docker-desktop) |
 | Node.js | 18+ | [Download](https://nodejs.org/) |
+| Go | 1.21+ | [Download](https://golang.org/) |
+| Python | 3.11+ | [Download](https://python.org/) |
 | Git | 2.0+ | [Download](https://git-scm.com/) |
 
 ### Spesifikasi Hardware
@@ -34,12 +36,12 @@
 
 ---
 
-## 2. Instalasi
+## 2. Instalasi Local
 
-### Step 1: Clone/Download Project
+### Step 1: Clone Project
 
 ```bash
-# Masuk ke folder project
+git clone https://github.com/YOUR_USERNAME/smart-parking.git
 cd smart-parking
 ```
 
@@ -50,54 +52,64 @@ cd smart-parking
 copy .env.example .env
 ```
 
-### Step 3: Install Frontend Dependencies
+### Step 3: Install Dependencies
 
 ```bash
-cd frontend
-npm install
-```
+# Frontend
+cd frontend && npm install && cd ..
 
-### Step 4: Build Frontend
+# AI Service
+cd ai-service && pip install -r requirements.txt && cd ..
 
-```bash
-npm run build
-cd ..
+# Backend
+cd backend && go mod tidy && cd ..
 ```
 
 ---
 
 ## 3. Menjalankan Aplikasi
 
-### Start dengan Docker Compose
+### Mode 1: Docker Compose (Paling Mudah)
 
 ```bash
-# Jalankan semua services
-docker-compose up -d
+# Start database services
+docker-compose up -d postgres minio createbuckets
+
+# Build frontend
+cd frontend && npm run build && cd ..
+
+# Start backend
+docker-compose up -d backend nginx
 ```
 
-### Verifikasi Services
+### Mode 2: Manual (Untuk Development)
 
+**Terminal 1 - Backend:**
 ```bash
-# Cek status container
-docker-compose ps
+cd backend
+go run cmd/server/main.go
 ```
 
-Output yang diharapkan:
+**Terminal 2 - AI Service:**
+```bash
+cd ai-service
+python main.py
 ```
-NAME                COMMAND                  SERVICE    STATUS
-parking-backend     "./main"                 backend    running
-parking-nginx       "nginx -g ..."           nginx      running
-parking-postgres    "docker-entrypoint..."   postgres   running (healthy)
-parking-minio       "minio server ..."       minio      running
+
+**Terminal 3 - Frontend:**
+```bash
+cd frontend
+npm run dev
 ```
 
 ### Akses Aplikasi
 
-| Layanan | URL | Keterangan |
-|---------|-----|------------|
-| Dashboard | http://localhost | Halaman utama |
-| API | http://localhost/api/slots | REST API |
-| MinIO Console | http://localhost:9001 | Storage management |
+| Layanan | URL |
+|---------|-----|
+| Dashboard | http://localhost:3000 (dev) / http://localhost (Docker) |
+| API | http://localhost:8080/api/slots |
+| AI Service | http://localhost:5000 |
+| MinIO Console | http://localhost:9001 (minioadmin/minioadmin123) |
 
 ---
 
@@ -118,31 +130,25 @@ parking-minio       "minio server ..."       minio      running
 │  │      PARKING SLOTS       │       LIVE CAMERA           │   │
 │  │  ┌─────────┬─────────┐   │   ┌───────────────────┐    │   │
 │  │  │   P1    │   P2    │   │   │                   │    │   │
-│  │  │   🚗    │   ✅    │   │   │   [Latest Image]  │    │   │
+│  │  │   🚗    │   ✅    │   │   │   [Live Stream]   │    │   │
 │  │  ├─────────┼─────────┤   │   │                   │    │   │
 │  │  │   P3    │   P4    │   │   └───────────────────┘    │   │
-│  │  │   ✅    │   🚗    │   │   [Upload Image]           │   │
+│  │  │   ✅    │   🚗    │   │   [Auto] [Detect] [Upload] │   │
 │  │  └─────────┴─────────┘   │                             │   │
 │  └──────────────────────────┴─────────────────────────────┘   │
-│                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
 
 ### 4.2 Fitur Utama
 
-#### Toggle Slot Status
-1. Klik pada slot yang ingin diubah
-2. Status akan berubah (Occupied ↔ Available)
-3. Perubahan akan disinkronkan ke semua client via WebSocket
-
-#### Upload Gambar
-1. Klik tombol "Upload Image"
-2. Pilih file gambar (JPG/PNG)
-3. Atau drag & drop gambar langsung ke area kamera
-
-#### Real-time Updates
-- Dashboard akan menerima update otomatis via WebSocket
-- Indikator koneksi: 🟢 Connected / 🔴 Disconnected
+| Fitur | Deskripsi |
+|-------|-----------|
+| **Toggle Slot** | Klik slot untuk ubah status manual |
+| **Live Stream** | Video real-time dari ESP32-CAM |
+| **Auto Detection** | AI mendeteksi kendaraan setiap 5 detik |
+| **Manual Detection** | Trigger deteksi manual saat auto OFF |
+| **Upload Image** | Upload gambar untuk dianalisis |
+| **Real-time Updates** | WebSocket update ke semua client |
 
 ---
 
@@ -163,87 +169,47 @@ GET /api/slots
       "id": "uuid",
       "code": "P1",
       "zone": "A",
-      "is_occupied": false,
-      "position_x": 0,
-      "position_y": 0,
-      "updated_at": "2026-01-17T12:00:00Z"
+      "is_occupied": false
     }
   ]
 }
 ```
 
-### 5.2 Toggle Slot
-
-```http
-POST /api/slots/{id}/toggle
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "code": "P1",
-    "is_occupied": true
-  }
-}
-```
-
-### 5.3 Get Statistics
+### 5.2 Get Statistics
 
 ```http
 GET /api/slots/stats
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "total": 4,
-    "occupied": 2,
-    "available": 2,
-    "occupancy_rate": 50.0
-  }
-}
-```
-
-### 5.4 Upload Image
+### 5.3 Toggle Slot
 
 ```http
-POST /api/capture
-Content-Type: multipart/form-data
-
-image: [file]
-camera_id: cam1
+POST /api/slots/{id}/toggle
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "image_url": "http://localhost:9000/parking-images/...",
-    "camera_id": "cam1",
-    "captured_at": "2026-01-17T12:00:00Z"
-  }
-}
+### 5.4 Stream Proxy
+
+```http
+GET /api/stream          # MJPEG stream
+GET /api/stream/capture  # Single frame
 ```
 
-### 5.5 WebSocket
+### 5.5 Sessions (Entry/Exit)
+
+```http
+POST /api/sessions/entry  # Vehicle entry
+POST /api/sessions/exit   # Vehicle exit
+```
+
+### 5.6 WebSocket
 
 ```javascript
-// Connect
-const ws = new WebSocket('ws://localhost/ws')
+const ws = new WebSocket('ws://localhost:8080/ws')
 
-// Receive messages
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data)
-  console.log(message)
   // { type: "slot_update", data: {...} }
-  // { type: "new_capture", data: {...} }
+  // { type: "detection_overlay", data: {...} }
 }
 ```
 
@@ -251,125 +217,119 @@ ws.onmessage = (event) => {
 
 ## 6. Troubleshooting
 
-### 6.1 Container tidak berjalan
+### 6.1 Backend tidak berjalan
 
 ```bash
 # Cek logs
 docker-compose logs backend
 
-# Restart container
-docker-compose restart backend
+# Atau manual
+cd backend && go run cmd/server/main.go
 ```
 
-### 6.2 Database connection error
+### 6.2 AI Service error
 
 ```bash
-# Cek PostgreSQL status
+# Cek Python dependencies
+cd ai-service
+pip install -r requirements.txt
+python main.py
+```
+
+### 6.3 Frontend not loading
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 6.4 Database connection error
+
+```bash
+# Cek PostgreSQL
 docker-compose logs postgres
 
-# Restart database
+# Restart
 docker-compose restart postgres
-```
-
-### 6.3 Frontend tidak loading
-
-```bash
-# Rebuild frontend
-cd frontend
-npm run build
-cd ..
-
-# Restart nginx
-docker-compose restart nginx
-```
-
-### 6.4 MinIO storage error
-
-```bash
-# Akses MinIO console
-# http://localhost:9001
-# Login: minioadmin / minioadmin123
-
-# Pastikan bucket 'parking-images' ada
 ```
 
 ### 6.5 Reset semua data
 
 ```bash
-# Stop dan hapus semua data
 docker-compose down -v
-
-# Start fresh
 docker-compose up -d
 ```
 
 ---
 
-## 7. Deployment ke AWS
+## 7. Deployment ke Cloud
 
-### 7.1 Menggunakan EC2
+### Arsitektur Production
 
-#### Step 1: Launch EC2 Instance
-- AMI: Amazon Linux 2023
-- Type: t2.medium (minimum)
-- Security Group: Allow port 80, 8080, 9000, 9001
-
-#### Step 2: Install Docker
-
-```bash
-# SSH ke EC2
-ssh -i your-key.pem ec2-user@your-ip
-
-# Install Docker
-sudo yum update -y
-sudo yum install docker -y
-sudo systemctl start docker
-sudo usermod -aG docker ec2-user
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                          PRODUCTION                                 │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                    CLOUDFLARE                                │   │
+│  │  ┌─────────────────────┐  ┌─────────────────────────────┐   │   │
+│  │  │  Cloudflare Pages   │  │  Cloudflare Proxy           │   │   │
+│  │  │  (Frontend React)   │  │  (API Protection)           │   │   │
+│  │  │  parking.domain.com │  │  api.domain.com             │   │   │
+│  │  └─────────────────────┘  └──────────────┬──────────────┘   │   │
+│  └──────────────────────────────────────────┼───────────────────┘   │
+│                                              │                       │
+│  ┌──────────────────────────────────────────▼───────────────────┐   │
+│  │                        AWS VPC                                │   │
+│  │  ┌───────────────────────────────────────────────────────┐   │   │
+│  │  │  PUBLIC SUBNET                                         │   │   │
+│  │  │  EC2 Backend (Go/Gin)                                  │   │   │
+│  │  └─────────────────────────┬─────────────────────────────┘   │   │
+│  │                             │                                 │   │
+│  │  ┌─────────────────────────▼─────────────────────────────┐   │   │
+│  │  │  PRIVATE SUBNET                                        │   │   │
+│  │  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │   │   │
+│  │  │  │ AI Service   │ │     RDS      │ │      S3      │   │   │   │
+│  │  │  │ (YOLO)       │ │  PostgreSQL  │ │   Images     │   │   │   │
+│  │  │  └──────────────┘ └──────────────┘ └──────────────┘   │   │   │
+│  │  └────────────────────────────────────────────────────────┘   │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Step 3: Deploy Application
+### Deployment Guides
 
-```bash
-# Clone project
-git clone <your-repo> smart-parking
-cd smart-parking
+| Guide | Deskripsi |
+|-------|-----------|
+| [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md) | Arsitektur & environment |
+| [AWS_CONSOLE_SETUP.md](AWS_CONSOLE_SETUP.md) | Step-by-step AWS setup |
+| [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) | Cloudflare Pages setup |
+| [CICD_SETUP.md](CICD_SETUP.md) | GitHub Actions CI/CD |
 
-# Setup environment
-cp .env.example .env
-nano .env  # Edit sesuai kebutuhan
+### Quick Deploy Steps
 
-# Build frontend
-cd frontend && npm install && npm run build && cd ..
+1. **Setup Cloudflare Pages** (Frontend)
+   - Connect GitHub repo
+   - Auto-deploy on push
 
-# Start services
-docker-compose up -d
-```
+2. **Setup AWS** (Backend)
+   - Create VPC with public/private subnets
+   - Deploy EC2 instances
+   - Configure RDS & S3
 
-### 7.2 Environment Variables untuk Production
-
-```env
-# .env (production)
-DATABASE_URL=postgres://user:password@rds-endpoint:5432/smartparking
-MINIO_ENDPOINT=s3.amazonaws.com
-MINIO_ACCESS_KEY=your-aws-access-key
-MINIO_SECRET_KEY=your-aws-secret-key
-MINIO_BUCKET=your-s3-bucket
-MINIO_USE_SSL=true
-GIN_MODE=release
-```
+3. **Configure DNS**
+   - `parking.domain.com` → Cloudflare Pages
+   - `api.domain.com` → EC2 Backend (via Cloudflare)
 
 ---
 
 ## 📞 Support
 
-Jika mengalami masalah, silakan:
-1. Cek bagian [Troubleshooting](#6-troubleshooting)
+Jika mengalami masalah:
+1. Cek [Troubleshooting](#6-troubleshooting)
 2. Buka issue di repository
-3. Hubungi tim development
+3. Cek dokumentasi di folder `docs/`
 
 ---
 

@@ -1,6 +1,6 @@
 # AWS Console Setup Guide - Smart Parking System
-# 💰 OPTIMIZED FOR FREE TIER ($100 Credit)
-# 📡 Using Cloudflare as CDN (FREE)
+# 💰 OPTIMIZED FOR FREE TIER
+# 📡 Using Cloudflare Pages for Frontend (FREE)
 
 Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **biaya minimal**.
 
@@ -10,28 +10,28 @@ Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **b
 
 | Service | Spec | Free Tier | Biaya/Bulan |
 |---------|------|-----------|-------------|
-| EC2 Backend | t2.micro | 750 jam/bulan (1 tahun) | **$0** |
-| EC2 Frontend | t2.micro | 750 jam/bulan (1 tahun) | **$0** |
-| RDS PostgreSQL | db.t3.micro | 750 jam/bulan (1 tahun) | **$0** |
+| Cloudflare Pages | Frontend | Unlimited | **$0** |
+| EC2 Backend | t3.micro | 750 jam/bulan | **$0** |
+| EC2 AI Service | t3.micro | 750 jam/bulan | **$0** |
+| RDS PostgreSQL | db.t3.micro | 750 jam/bulan | **$0** |
 | S3 | 5GB | 5GB free | **$0** |
-| Cloudflare CDN | Unlimited | Always free | **$0** |
 | **Total** | | | **$0/bulan** |
 
-> ⚠️ **Dengan $100 credit, bisa jalan sangat lama!**
+> ⚠️ **Note**: 2 EC2 instances running 24/7 = 1440 jam/bulan (melebihi 750 jam free tier). Solusi: Matikan saat tidak dipakai, atau gabung Backend+AI di 1 EC2.
 
 ---
 
 ## 📋 Daftar Isi
 
 1. [Login AWS Console](#1-login-aws-console)
-2. [Create Security Groups](#2-create-security-groups)
-3. [Create RDS PostgreSQL (Free Tier)](#3-create-rds-postgresql-free-tier)
-4. [Create S3 Bucket (Free)](#4-create-s3-bucket-free)
-5. [Create EC2 Backend (Free Tier)](#5-create-ec2-backend-free-tier)
-6. [Create EC2 Frontend (Free Tier)](#6-create-ec2-frontend-free-tier)
-7. [Setup Cloudflare CDN (Free)](#7-setup-cloudflare-cdn-free)
-8. [Deploy Application](#8-deploy-application)
-9. [Tips Hemat Biaya](#9-tips-hemat-biaya)
+2. [Create VPC & Subnets](#2-create-vpc--subnets)
+3. [Create Security Groups](#3-create-security-groups)
+4. [Create RDS PostgreSQL](#4-create-rds-postgresql)
+5. [Create S3 Bucket](#5-create-s3-bucket)
+6. [Create EC2 Backend (Public)](#6-create-ec2-backend-public)
+7. [Create EC2 AI Service (Private)](#7-create-ec2-ai-service-private)
+8. [Setup Cloudflare Pages (Frontend)](#8-setup-cloudflare-pages-frontend)
+9. [Deploy Application](#9-deploy-application)
 
 ---
 
@@ -39,313 +39,251 @@ Panduan langkah demi langkah untuk deploy Smart Parking System ke AWS dengan **b
 
 1. Buka https://aws.amazon.com/console/
 2. Klik **Sign In to the Console**
-3. Masukkan email dan password
-4. Pilih region: **Asia Pacific (Singapore) - ap-southeast-1**
+3. Pilih region: **Asia Pacific (Singapore) - ap-southeast-1**
 
 ---
 
-## 2. Create Security Groups
+## 2. Create VPC & Subnets
 
-### 2.1 Backend Security Group
+### 2.1 Create VPC
 
-1. **Services → EC2 → Security Groups → Create security group**
+1. **Services → VPC → Create VPC**
+2. Settings:
+   - Name: `smart-parking-vpc`
+   - IPv4 CIDR: `10.0.0.0/16`
+3. Create VPC
 
-2. Isi:
-   - **Name**: `smart-parking-backend-sg`
-   - **Description**: `Backend EC2`
-   - **VPC**: Default VPC
+### 2.2 Create Public Subnet
 
-3. **Inbound rules**:
-   | Type | Port | Source |
-   |------|------|--------|
-   | SSH | 22 | My IP |
-   | Custom TCP | 8080 | 0.0.0.0/0 |
+1. **Subnets → Create subnet**
+   - VPC: `smart-parking-vpc`
+   - Name: `smart-parking-public`
+   - CIDR: `10.0.1.0/24`
+   - AZ: ap-southeast-1a
 
-4. Klik **Create**
+### 2.3 Create Private Subnet
 
-### 2.2 Frontend Security Group
+1. **Create subnet**
+   - Name: `smart-parking-private`
+   - CIDR: `10.0.2.0/24`
+   - AZ: ap-southeast-1a
+
+### 2.4 Create Internet Gateway
+
+1. **Internet Gateways → Create**
+   - Name: `smart-parking-igw`
+2. **Attach to VPC**: `smart-parking-vpc`
+
+### 2.5 Create Route Table (Public)
+
+1. **Route Tables → Create**
+   - Name: `smart-parking-public-rt`
+   - VPC: `smart-parking-vpc`
+2. **Edit routes**: Add `0.0.0.0/0` → `smart-parking-igw`
+3. **Subnet associations**: Associate `smart-parking-public`
+
+### 2.6 Create S3 VPC Endpoint (FREE)
+
+1. **Endpoints → Create endpoint**
+   - Service: `com.amazonaws.ap-southeast-1.s3` (Gateway)
+   - VPC: `smart-parking-vpc`
+   - Route tables: Both public and private
+2. **Cost: $0** (Gateway endpoints are free!)
+
+---
+
+## 3. Create Security Groups
+
+### 3.1 Backend Security Group (Public)
+
+1. **EC2 → Security Groups → Create**
+   - Name: `sg-backend`
+   - VPC: `smart-parking-vpc`
+
+2. **Inbound rules**:
+   | Type | Port | Source | Description |
+   |------|------|--------|-------------|
+   | SSH | 22 | My IP | Admin access |
+   | Custom TCP | 8080 | Cloudflare IPs* | API from Cloudflare |
+
+   *Cloudflare IPs: https://www.cloudflare.com/ips/
+
+### 3.2 AI Service Security Group (Private)
 
 1. **Create security group**
-   - **Name**: `smart-parking-frontend-sg`
+   - Name: `sg-ai-service`
 
 2. **Inbound rules**:
    | Type | Port | Source |
    |------|------|--------|
-   | SSH | 22 | My IP |
-   | HTTP | 80 | 0.0.0.0/0 |
-   | HTTPS | 443 | 0.0.0.0/0 |
+   | Custom TCP | 5000 | sg-backend |
 
-### 2.3 RDS Security Group
+### 3.3 RDS Security Group
 
 1. **Create security group**
-   - **Name**: `smart-parking-rds-sg`
+   - Name: `sg-rds`
 
 2. **Inbound rules**:
    | Type | Port | Source |
    |------|------|--------|
-   | PostgreSQL | 5432 | smart-parking-backend-sg |
+   | PostgreSQL | 5432 | sg-backend |
 
 ---
 
-## 3. Create RDS PostgreSQL (Free Tier)
+## 4. Create RDS PostgreSQL
 
 1. **Services → RDS → Create database**
-
-2. **Method**: Standard create
-
-3. **Engine**: PostgreSQL 16.x
-
-4. **Templates**: ⭐ **Free tier** ⭐
-
-5. **Settings**:
+2. **Engine**: PostgreSQL 16
+3. **Templates**: ⭐ **Free tier**
+4. **Settings**:
    - DB identifier: `smart-parking-db`
    - Username: `postgres`
-   - Password: `YourPassword123!` (catat!)
-
-6. **Instance**: 
-   - ⭐ **db.t3.micro** (Free tier eligible)
-
-7. **Storage**:
-   - Type: gp2
-   - Size: **20 GB**
-   - ❌ Disable autoscaling
-
-8. **Connectivity**:
+   - Password: (catat!)
+5. **Instance**: **db.t3.micro**
+6. **Storage**: 20 GB, disable autoscaling
+7. **Connectivity**:
+   - VPC: `smart-parking-vpc`
+   - Subnet: Create new (private subnets)
    - Public access: **No**
-   - Security group: `smart-parking-rds-sg`
-
-9. **Additional**:
+   - Security group: `sg-rds`
+8. **Additional**: 
    - Database name: `smartparking`
-   - ❌ Disable automated backups
-   - ❌ Disable encryption
-   - ❌ Disable monitoring
-
-10. **Create database**
-
-11. Catat **Endpoint** setelah available
+   - Disable backup, encryption, monitoring
+9. **Create database**
 
 ---
 
-## 4. Create S3 Bucket (Free)
+## 5. Create S3 Bucket
 
 1. **Services → S3 → Create bucket**
-
 2. **Name**: `smart-parking-images-xxx` (unique)
-
 3. **Region**: ap-southeast-1
+4. **Block Public Access**: Keep default (private)
+5. **Create bucket**
 
-4. **Object Ownership**: ACLs enabled
-
-5. **Block Public Access**: ❌ Uncheck all
-
-6. **Create bucket**
-
-7. **Bucket → Permissions → Bucket policy**:
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [{
-        "Sid": "PublicRead",
-        "Effect": "Allow",
-        "Principal": "*",
-        "Action": "s3:GetObject",
-        "Resource": "arn:aws:s3:::smart-parking-images-xxx/*"
-    }]
-}
-```
+> Note: Backend accesses S3 via VPC Endpoint (private, no internet)
 
 ---
 
-## 5. Create EC2 Backend (Free Tier)
+## 6. Create EC2 Backend (Public)
 
-1. **Services → EC2 → Launch instance**
-
+1. **EC2 → Launch instance**
 2. **Name**: `smart-parking-backend`
-
-3. **AMI**: Ubuntu Server 22.04 LTS (Free tier eligible)
-
-4. **Instance type**: ⭐ **t2.micro** (Free tier) ⭐
-   > ⚠️ Catatan: t2.micro (1GB RAM) tidak cukup untuk AI Service. Untuk demo tanpa AI, gunakan t2.micro. Jika butuh AI, upgrade ke t2.small (+$9/bulan).
-
-5. **Key pair**: Create new → `smart-parking-key` → Download .pem
-
+3. **AMI**: Ubuntu Server 22.04 LTS
+4. **Instance type**: ⭐ **t3.micro**
+5. **Key pair**: Create `smart-parking-key` → Download .pem
 6. **Network**:
+   - VPC: `smart-parking-vpc`
+   - Subnet: `smart-parking-public`
    - Auto-assign public IP: **Enable**
-   - Security group: `smart-parking-backend-sg`
-
-7. **Storage**: **8 GB** gp2 (hemat storage)
-
+   - Security group: `sg-backend`
+7. **Storage**: 8 GB gp3
 8. **Launch instance**
 
 ---
 
-## 6. Create EC2 Frontend (Free Tier)
+## 7. Create EC2 AI Service (Private)
 
 1. **Launch instance**
-
-2. **Name**: `smart-parking-frontend`
-
+2. **Name**: `smart-parking-ai`
 3. **AMI**: Ubuntu Server 22.04 LTS
-
-4. **Instance type**: ⭐ **t2.micro** (Free tier) ⭐
-
+4. **Instance type**: **t3.micro**
 5. **Key pair**: `smart-parking-key`
-
 6. **Network**:
-   - Security group: `smart-parking-frontend-sg`
-   - Auto-assign public IP: **Enable**
-
-7. **Storage**: **8 GB** gp2
-
+   - Subnet: `smart-parking-private`
+   - Auto-assign public IP: **Disable**
+   - Security group: `sg-ai-service`
+7. **Storage**: 8 GB gp3
 8. **Launch instance**
 
----
-
-## 7. Setup Cloudflare CDN (Free)
-
-> 📖 Lihat dokumentasi lengkap: `docs/CLOUDFLARE_SETUP.md`
-
-### Ringkasan:
-
-1. **Daftar** di https://dash.cloudflare.com/sign-up
-
-2. **Add site** → masukkan domain kamu
-
-3. **Update nameservers** di domain registrar
-
-4. **Add DNS records**:
-   | Type | Name | Content | Proxy |
-   |------|------|---------|-------|
-   | A | `@` | EC2 Frontend IP | ☁️ Proxied |
-   | A | `www` | EC2 Frontend IP | ☁️ Proxied |
-   | A | `api` | EC2 Backend IP | ☁️ Proxied |
-
-5. **SSL/TLS** → Mode: **Full** atau **Flexible**
-
-**Hasil:**
-- `yourdomain.com` → Frontend dengan HTTPS gratis!
-- `api.yourdomain.com` → Backend
+> ⚠️ **Access**: No public IP. Use AWS Session Manager or SSH via Backend.
 
 ---
 
-## 8. Deploy Application
+## 8. Setup Cloudflare Pages (Frontend)
 
-### 8.1 Setup EC2 Backend
+> 📖 Detail: [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md)
+
+### Quick Steps:
+
+1. **Cloudflare Dashboard → Pages → Create project**
+2. **Connect to Git** → Select `smart-parking` repo
+3. **Build settings**:
+   - Framework: Vite
+   - Build command: `npm run build`
+   - Output: `dist`
+   - Root: `frontend`
+4. **Environment variables**:
+   - `VITE_API_URL` = `https://api.yourdomain.com`
+   - `VITE_WS_URL` = `wss://api.yourdomain.com/ws`
+5. **Save and Deploy**
+
+### DNS Records:
+
+| Type | Name | Content | Proxy |
+|------|------|---------|-------|
+| CNAME | `parking` | `xxx.pages.dev` | 🟠 Proxied |
+| A | `api` | EC2 Backend IP | 🟠 Proxied |
+
+---
+
+## 9. Deploy Application
+
+### 9.1 Setup Backend (EC2 Public)
 
 ```bash
 ssh -i "smart-parking-key.pem" ubuntu@BACKEND_IP
 
 # Install Docker
-sudo apt update && sudo apt upgrade -y
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER
+logout
 
-# Logout & login lagi
-exit
+# Reconnect & clone
 ssh -i "smart-parking-key.pem" ubuntu@BACKEND_IP
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Clone repo
 git clone https://github.com/YOUR_USERNAME/smart-parking.git
 cd smart-parking
 
 # Create .env
 cat > .env << EOF
-DATABASE_URL=postgres://postgres:YourPassword123!@RDS_ENDPOINT:5432/smartparking?sslmode=require
-USE_AWS_S3=true
+DATABASE_URL=postgres://postgres:PASSWORD@RDS_ENDPOINT:5432/smartparking
+AI_SERVICE_URL=http://10.0.2.XX:5000
 AWS_REGION=ap-southeast-1
-AWS_ACCESS_KEY_ID=xxx
-AWS_SECRET_ACCESS_KEY=xxx
 S3_BUCKET=smart-parking-images-xxx
 PORT=8080
 GIN_MODE=release
 EOF
 
-# Start (TANPA AI SERVICE untuk t2.micro)
-docker-compose -f aws/backend.docker-compose.yml up -d backend
-
-# Verify
-curl http://localhost:8080/api/slots
+# Start backend
+docker-compose up -d backend
 ```
 
-### 8.2 Setup EC2 Frontend
+### 9.2 Setup AI Service (EC2 Private)
 
 ```bash
-ssh -i "smart-parking-key.pem" ubuntu@FRONTEND_IP
+# Via Session Manager (recommended)
+aws ssm start-session --target i-xxxxx
 
-# Install Docker & Node
-sudo apt update && sudo apt upgrade -y
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+# Or SSH via Backend
+ssh -i key.pem -J ubuntu@BACKEND_IP ubuntu@10.0.2.XX
 
-# Logout & login
-exit
-ssh -i "smart-parking-key.pem" ubuntu@FRONTEND_IP
-
-# Clone & build
+# Clone & run
 git clone https://github.com/YOUR_USERNAME/smart-parking.git
-cd smart-parking/frontend
-npm install
-npm run build
-cd ..
-
-# Update nginx dengan Backend Private IP
-sed -i "s/BACKEND_EC2_PRIVATE_IP/PRIVATE_IP/g" nginx/frontend.nginx.conf
-
-# Start
-docker-compose -f aws/frontend.docker-compose.yml up -d
+cd smart-parking/ai-service
+docker-compose up -d
 ```
 
 ---
 
-## 9. Tips Hemat Biaya 💰
+## ✅ Deployment Checklist
 
-### ✅ Yang Harus Dilakukan
-
-1. **Matikan EC2 saat tidak dipakai**
-   ```bash
-   # AWS Console → EC2 → Instance → Stop
-   ```
-
-2. **Gunakan Free Tier resources**
-   - t2.micro untuk EC2
-   - db.t3.micro untuk RDS
-   - 5GB S3
-   - Cloudflare (gratis selamanya!)
-
-3. **Disable fitur yang tidak perlu**
-   - RDS: backup, encryption, monitoring
-
-4. **Set Billing Alerts**
-   - AWS Console → Billing → Budgets
-   - Create budget: $10/month alert
-
-### ❌ Yang Harus Dihindari
-
-1. **Jangan biarkan EC2 running 24/7** jika tidak perlu
-2. **Jangan pakai instance besar** (t2.small, t2.medium)
-3. **Jangan enable semua monitoring**
-4. **Jangan lupa terminate** setelah selesai demo
-
-### 📊 Monitor Biaya
-
-1. **AWS Console → Billing → Bills**
-2. Cek usage setiap minggu
-3. Set budget alert di $20, $50, $80
-
----
-
-## ✅ Checklist Free Tier
-
-- [ ] EC2 Backend: t2.micro ✓
-- [ ] EC2 Frontend: t2.micro ✓
-- [ ] RDS: db.t3.micro ✓
-- [ ] Storage: 8GB per EC2 ✓
-- [ ] S3: Public bucket ✓
-- [ ] Cloudflare: DNS + CDN setup ✓
-- [ ] Billing alert set ✓
+- [ ] VPC with public/private subnets created
+- [ ] S3 VPC Endpoint configured (free)
+- [ ] Security groups configured correctly
+- [ ] RDS in private subnet
+- [ ] EC2 Backend in public subnet with Elastic IP
+- [ ] EC2 AI Service in private subnet
+- [ ] Cloudflare Pages connected to GitHub
+- [ ] DNS records configured
+- [ ] Backend accessible via api.yourdomain.com
+- [ ] Frontend accessible via parking.yourdomain.com

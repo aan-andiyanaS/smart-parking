@@ -1,25 +1,24 @@
 # GitHub Actions CI/CD Setup Guide
-# 📡 Using Cloudflare as CDN
+# Cloudflare Pages + AWS Deployment
 
-Panduan lengkap untuk setup CI/CD dengan GitHub Actions.
+Panduan lengkap untuk setup CI/CD dengan GitHub Actions untuk arsitektur hybrid (Cloudflare Pages + AWS).
 
 ---
 
 ## 📋 Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   GitHub Actions                        │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  Push to main                                           │
-│       │                                                 │
-│       ├── backend/** changed  ──► Deploy Backend EC2   │
-│       │                                                 │
-│       └── frontend/** changed ──► Build ──► Deploy EC2 │
-│                                                         │
-│  Cloudflare automatically caches new content!          │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           GitHub Actions CI/CD                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Push to main                                                                │
+│       │                                                                      │
+│       ├── frontend/** changed ──► Cloudflare Pages (Auto Deploy)            │
+│       │                                                                      │
+│       └── backend/** changed  ──► SSH to EC2 → Docker Build → Restart       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -55,38 +54,28 @@ git push -u origin main
 3. Klik **New repository secret**
 4. Tambah secrets berikut:
 
-#### EC2 Access
+#### Cloudflare (untuk Frontend)
 
 | Secret Name | Value | Cara Dapat |
 |-------------|-------|------------|
-| `EC2_BACKEND_HOST` | `13.250.xxx.xxx` | EC2 Console → Backend Instance → Public IP |
-| `EC2_FRONTEND_HOST` | `52.77.xxx.xxx` | EC2 Console → Frontend Instance → Public IP |
-| `EC2_USERNAME` | `ubuntu` | Default untuk Ubuntu AMI |
-| `EC2_SSH_KEY` | `-----BEGIN RSA PRIVATE KEY-----...` | Isi dari file .pem |
+| `CLOUDFLARE_API_TOKEN` | `xxx...` | Cloudflare Dashboard → API Tokens → Create Token |
+| `CLOUDFLARE_ACCOUNT_ID` | `xxx...` | Cloudflare Dashboard → Overview → Account ID |
 
-**Untuk EC2_SSH_KEY:**
+#### EC2 Access (untuk Backend)
+
+| Secret Name | Value | Cara Dapat |
+|-------------|-------|------------|
+| `EC2_BACKEND_HOST` | `54.xxx.xxx.xxx` | EC2 Console → Backend Instance → Public IP |
+| `EC2_USERNAME` | `ubuntu` | Default untuk Ubuntu AMI |
+| `EC2_SSH_KEY` | `-----BEGIN...-----END...` | Isi file .pem |
+
+**Cara copy EC2_SSH_KEY:**
 ```bash
-# Buka file .pem dan copy isinya
 cat smart-parking-key.pem
 ```
 Copy semua termasuk `-----BEGIN...` dan `-----END...`
 
-#### Database
-
-| Secret Name | Value |
-|-------------|-------|
-| `DATABASE_URL` | `postgres://postgres:PASSWORD@rds-endpoint:5432/smartparking?sslmode=require` |
-
-#### AWS Credentials (untuk S3 only)
-
-| Secret Name | Value | Cara Dapat |
-|-------------|-------|------------|
-| `AWS_REGION` | `ap-southeast-1` | - |
-| `AWS_ACCESS_KEY_ID` | `AKIA...` | IAM → Users → Security credentials |
-| `AWS_SECRET_ACCESS_KEY` | `xxx...` | IAM → Users → Security credentials |
-| `S3_BUCKET` | `smart-parking-images-xxx` | S3 Console |
-
-#### Frontend Build
+#### Frontend Build Variables
 
 | Secret Name | Value |
 |-------------|-------|
@@ -95,15 +84,23 @@ Copy semua termasuk `-----BEGIN...` dan `-----END...`
 
 ---
 
-### Step 3: Create IAM User untuk CI/CD
+### Step 3: Connect Cloudflare Pages ke GitHub
 
-1. **Services → IAM → Users → Add user**
-2. User name: `github-actions`
-3. Access type: **Access key - Programmatic access** ✓
-4. Attach policies:
-   - `AmazonS3FullAccess`
-5. Create user
-6. **Copy Access Key ID dan Secret Access Key!**
+1. **Cloudflare Dashboard → Pages → Create a project**
+2. **Connect to Git → GitHub**
+3. Pilih repository `smart-parking`
+4. Configure:
+   - **Project name**: `smart-parking`
+   - **Production branch**: `main`
+   - **Build command**: `npm run build`
+   - **Build output directory**: `dist`
+   - **Root directory**: `frontend`
+5. **Environment variables**:
+   - `VITE_API_URL` = `https://api.yourdomain.com`
+   - `VITE_WS_URL` = `wss://api.yourdomain.com/ws`
+6. **Save and Deploy**
+
+> **Note**: Setelah ini, setiap push ke `main` yang mengubah `frontend/` akan auto-deploy ke Cloudflare Pages!
 
 ---
 
@@ -116,42 +113,36 @@ git add .
 git commit -m "Test CI/CD"
 git push
 ```
-3. Buka **GitHub → Actions** → Lihat workflow running
+3. Cek:
+   - **GitHub → Actions** → Lihat workflow running
+   - **Cloudflare Dashboard → Pages** → Lihat deployment progress
 
 ---
 
 ## 📁 Workflow Files
 
-### CI Workflow (`.github/workflows/ci.yml`)
+### Deploy Frontend (`.github/workflows/deploy-frontend.yml`)
 
-Jalan pada: Setiap push dan PR
+**Trigger**: Push ke `main` yang mengubah `frontend/**`
+
 ```yaml
-- Build Golang backend
-- Lint Go code
-- Build React frontend
-- Test Docker build
+- Checkout code
+- Setup Node.js
+- Install dependencies
+- Build with environment variables
+- Deploy to Cloudflare Pages (cloudflare/pages-action)
 ```
 
 ### Deploy Backend (`.github/workflows/deploy-backend.yml`)
 
-Jalan pada: Push ke main yang mengubah `backend/**`
+**Trigger**: Push ke `main` yang mengubah `backend/**`
+
 ```yaml
 - SSH ke EC2 Backend
 - Git pull
 - Update .env
 - Docker build & restart
 - Health check
-```
-
-### Deploy Frontend (`.github/workflows/deploy-frontend.yml`)
-
-Jalan pada: Push ke main yang mengubah `frontend/**`
-```yaml
-- Build React
-- SSH ke EC2 Frontend
-- Copy files
-- Restart Nginx
-- Cloudflare auto-caches new content
 ```
 
 ---
@@ -167,44 +158,41 @@ Jika mau trigger deployment manual:
 
 **Via GitHub CLI:**
 ```bash
-gh workflow run deploy-backend.yml
 gh workflow run deploy-frontend.yml
+gh workflow run deploy-backend.yml
 ```
 
 ---
 
-## 🔄 Cloudflare Cache
+## 🔄 Cloudflare Pages Auto-Purge
 
-Cloudflare otomatis cache content baru. Jika perlu purge manual:
+Cloudflare Pages otomatis:
+- Cache invalidation saat deploy
+- Global CDN distribution
+- SSL certificate renewal
 
-1. **Cloudflare Dashboard → Caching → Purge Everything**
-
-Atau via API (opsional, bisa ditambah ke workflow):
-```bash
-curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
-     -H "Authorization: Bearer CLOUDFLARE_API_TOKEN" \
-     -H "Content-Type: application/json" \
-     --data '{"purge_everything":true}'
-```
+**Tidak perlu manual purge!**
 
 ---
 
 ## ❌ Troubleshooting
 
-### SSH Connection Failed
+### Frontend Deploy Failed (Cloudflare)
+- Cek Cloudflare Pages → Deployments → View logs
+- Pastikan `VITE_API_URL` sudah di-set di Environment variables
+- Cek build command: `npm run build`
+
+### Backend Deploy Failed (EC2)
 - Cek `EC2_SSH_KEY` sudah benar (termasuk headers)
 - Cek Security Group EC2 izinkan SSH dari 0.0.0.0/0
-- Cek EC2 instance running
-
-### Docker Build Failed
-- SSH ke EC2 dan cek log:
+- SSH manual dan cek:
   ```bash
-  docker-compose -f aws/backend.docker-compose.yml logs
+  docker-compose logs backend
   ```
 
-### Cache Not Updated
-- Cloudflare → Caching → Development Mode → On (disable cache sementara)
-- Atau Purge Everything
+### API Calls Failed from Frontend
+- Cek CORS di backend allow domain Cloudflare Pages
+- Cek Cloudflare DNS untuk `api.yourdomain.com`
 
 ---
 
@@ -212,9 +200,9 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
 
 - [ ] Code pushed ke GitHub
 - [ ] Repository settings → Actions enabled
-- [ ] Semua secrets sudah ditambah
-- [ ] IAM user untuk CI/CD dibuat
+- [ ] Cloudflare Pages connected to GitHub
+- [ ] Environment variables set di Cloudflare Pages
+- [ ] GitHub Secrets untuk EC2 sudah ditambah
 - [ ] First push berhasil trigger workflow
-- [ ] Backend deploy success
-- [ ] Frontend deploy success
-- [ ] Cloudflare DNS configured
+- [ ] Frontend live di Cloudflare Pages
+- [ ] Backend live di EC2
