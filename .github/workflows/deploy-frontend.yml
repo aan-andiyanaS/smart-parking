@@ -1,7 +1,7 @@
-# GitHub Actions - Deploy Frontend to AWS EC2
-# Uses Cloudflare for CDN (no cache invalidation needed - auto purge)
+# GitHub Actions - Deploy Frontend to Cloudflare Pages
+# Automatically deploys on push to main branch
 
-name: Deploy Frontend
+name: Deploy Frontend to Cloudflare Pages
 
 on:
   push:
@@ -9,15 +9,20 @@ on:
       - main
     paths:
       - 'frontend/**'
-      - 'nginx/frontend.nginx.conf'
       - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build Frontend
+  deploy:
+    name: Build & Deploy to Cloudflare Pages
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,53 +42,19 @@ jobs:
           VITE_WS_URL: ${{ secrets.WS_URL }}
         run: npm run build
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
         with:
-          name: frontend-build
-          path: frontend/dist
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: smart-parking
+          directory: frontend/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: target branch for preview
+          branch: ${{ github.ref_name }}
 
-  deploy:
-    name: Deploy to EC2
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Build Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/dist
-
-      - name: Deploy to EC2 Frontend
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_FRONTEND_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/smart-parking
-            git pull origin main
-            
-            # Rebuild and restart nginx
-            docker-compose -f aws/frontend.docker-compose.yml up -d --build
-            
-            echo "✅ Frontend deployed!"
-
-      - name: Copy Build Files
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_FRONTEND_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "frontend/dist/*"
-          target: "/home/ubuntu/smart-parking/"
-          strip_components: 0
-
-      # Cloudflare cache is automatically purged or use API if needed
-      # No CloudFront invalidation step needed
-
-      - name: Notify Success
-        if: success()
-        run: echo "✅ Frontend deployed! Cloudflare will auto-cache new content."
+      - name: Deployment Summary
+        run: |
+          echo "✅ Frontend deployed to Cloudflare Pages!"
+          echo "🌐 Production: https://smart-parking.pages.dev"
+          echo "🌐 Or custom domain: https://parking.yourdomain.com"
