@@ -187,4 +187,31 @@
 .camera-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Detect Error Message */
+.detect-error {
+    margin-top: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius);
+    color: #f59e0b;
+    font-size: 0.875rem;
+}
+
+/* Warning button style */
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+/* Spin animation for icons */
+.spin {
+    animation: spin 1s linear infinite;
 }

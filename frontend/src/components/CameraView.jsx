@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Upload, Camera, Clock, Image, Video, VideoOff, RefreshCw } from 'lucide-react'
+import { Upload, Camera, Clock, Image, Video, VideoOff, RefreshCw, Zap, ZapOff, Search } from 'lucide-react'
 import './CameraView.css'
 
 function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
@@ -8,6 +8,9 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
     const [isStreaming, setIsStreaming] = useState(true)
     const [streamError, setStreamError] = useState(false)
     const [overlayData, setOverlayData] = useState(null)
+    const [isAutoDetect, setIsAutoDetect] = useState(true)
+    const [isDetecting, setIsDetecting] = useState(false)
+    const [detectError, setDetectError] = useState(null)
 
     const fileInputRef = useRef(null)
     const canvasRef = useRef(null)
@@ -16,6 +19,7 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
     // Stream URL - use prop or relative path (works through nginx proxy)
     const actualStreamUrl = streamUrl || (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL + '/api/stream' : '/api/stream')
     const actualAiUrl = aiServiceUrl || (import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:5000')
+    const captureUrl = streamUrl ? streamUrl.replace('/stream', '/stream/capture') : (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL + '/api/stream/capture' : '/api/stream/capture')
 
     // Fetch overlay data from AI service
     const fetchOverlay = useCallback(async () => {
@@ -25,21 +29,69 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
                 const data = await response.json()
                 if (data.success) {
                     setOverlayData(data)
+                    setDetectError(null)
                 }
             }
         } catch (err) {
             console.log('Overlay fetch failed:', err.message)
+            if (isAutoDetect) {
+                setDetectError('Auto detection tidak tersedia')
+            }
         }
-    }, [actualAiUrl])
+    }, [actualAiUrl, isAutoDetect])
 
-    // Fetch overlay periodically
+    // Manual detection - capture frame and send to AI
+    const handleManualDetect = useCallback(async () => {
+        setIsDetecting(true)
+        setDetectError(null)
+        try {
+            // Capture frame from stream
+            const captureResponse = await fetch(captureUrl)
+            if (!captureResponse.ok) {
+                throw new Error('Gagal mengambil frame dari kamera')
+            }
+            const blob = await captureResponse.blob()
+
+            // Send to AI service for analysis
+            const formData = new FormData()
+            formData.append('image', blob, 'capture.jpg')
+
+            const analyzeResponse = await fetch(`${actualAiUrl}/analyze`, {
+                method: 'POST',
+                body: formData
+            })
+
+            if (!analyzeResponse.ok) {
+                throw new Error('AI service tidak merespons')
+            }
+
+            const result = await analyzeResponse.json()
+            if (result.success) {
+                // Refresh overlay data
+                await fetchOverlay()
+            }
+        } catch (err) {
+            console.error('Manual detection error:', err)
+            setDetectError(err.message)
+        } finally {
+            setIsDetecting(false)
+        }
+    }, [captureUrl, actualAiUrl, fetchOverlay])
+
+    // Toggle auto detection
+    const toggleAutoDetect = () => {
+        setIsAutoDetect(!isAutoDetect)
+        setDetectError(null)
+    }
+
+    // Fetch overlay periodically (only if auto detect is ON)
     useEffect(() => {
-        if (isStreaming) {
+        if (isStreaming && isAutoDetect) {
             fetchOverlay()
             const interval = setInterval(fetchOverlay, 5000)
             return () => clearInterval(interval)
         }
-    }, [isStreaming, fetchOverlay])
+    }, [isStreaming, isAutoDetect, fetchOverlay])
 
     // Draw overlay on canvas
     useEffect(() => {
@@ -290,6 +342,39 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
                 </div>
 
                 <div className="camera-actions">
+                    {/* Auto Detection Toggle */}
+                    <button
+                        className={`btn ${isAutoDetect ? 'btn-success' : 'btn-warning'}`}
+                        onClick={toggleAutoDetect}
+                        title={isAutoDetect ? 'Auto detection aktif (klik untuk matikan)' : 'Auto detection mati (klik untuk aktifkan)'}
+                    >
+                        {isAutoDetect ? <Zap size={16} /> : <ZapOff size={16} />}
+                        {isAutoDetect ? 'Auto' : 'Manual'}
+                    </button>
+
+                    {/* Manual Detect Button (only when auto is OFF) */}
+                    {!isAutoDetect && (
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleManualDetect}
+                            disabled={isDetecting || !isStreaming}
+                            title="Deteksi manual - ambil frame dan proses"
+                        >
+                            {isDetecting ? (
+                                <>
+                                    <RefreshCw size={16} className="spin" />
+                                    Detecting...
+                                </>
+                            ) : (
+                                <>
+                                    <Search size={16} />
+                                    Detect Now
+                                </>
+                            )}
+                        </button>
+                    )}
+
+                    {/* Live/Snapshot Toggle */}
                     <button
                         className={`btn ${isStreaming ? 'btn-success' : 'btn-secondary'}`}
                         onClick={toggleStreaming}
@@ -297,6 +382,8 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
                         {isStreaming ? <Video size={16} /> : <VideoOff size={16} />}
                         {isStreaming ? 'Live' : 'Snapshot'}
                     </button>
+
+                    {/* Upload Button */}
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -305,14 +392,22 @@ function CameraView({ capture, onUpload, streamUrl, aiServiceUrl }) {
                         style={{ display: 'none' }}
                     />
                     <button
-                        className="btn btn-primary"
+                        className="btn btn-secondary"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
+                        title="Upload gambar untuk dianalisis"
                     >
                         <Upload size={16} />
                         Upload
                     </button>
                 </div>
+
+                {/* Detection Error Message */}
+                {detectError && (
+                    <div className="detect-error">
+                        ⚠️ {detectError}
+                    </div>
+                )}
             </div>
         </div>
     )
